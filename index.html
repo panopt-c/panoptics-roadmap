@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PANOPTIC'S ROADMAP — 18-Month AI/ML Mastery Protocol</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0c;--bg2:#111115;--bg3:#0d0d10;--tx:#e8e6e3;--txd:#8a8a95;--txm:#55555f;--bd:#2a2a35;--bda:#1e1e26;--red:#ff3e3e;--org:#ff8c42;--ylw:#ffd23f;--grn:#4ade80;--cyn:#22d3ee;--pur:#a78bfa;--pnk:#f472b6}
+[data-theme="light"]{--bg:#f5f5f0;--bg2:#ffffff;--bg3:#fafaf8;--tx:#1a1a1a;--txd:#666;--txm:#999;--bd:#e0e0e0;--bda:#eee}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font-family:'Outfit',sans-serif;line-height:1.6;transition:background .3s,color .3s}
+.mono{font-family:'JetBrains Mono',monospace}
+.wrap{max-width:900px;margin:0 auto;padding:0 1.5rem}
+.hdr{padding:2.5rem 0 1rem}
+.hdr-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem}
+.hdr-nm{font-size:.6rem;letter-spacing:.4em;color:var(--red);margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem}
+.hdr-nm input{background:0;border:0;border-bottom:1px solid var(--red);color:var(--red);font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:.4em;outline:0;width:180px;text-transform:uppercase}
+.hdr-nm span.editable{cursor:pointer;border-bottom:1px dashed var(--bd)}
+h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:900;line-height:.95;background:linear-gradient(135deg,var(--tx) 0%,#ff3e3e 60%,#ff8c42 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sub{font-size:.7rem;color:var(--txm);margin-top:.5rem}
+.btns{display:flex;gap:.4rem;flex-wrap:wrap}
+.btn{font-family:'JetBrains Mono',monospace;font-size:.5rem;letter-spacing:.1em;padding:.35rem .5rem;background:0;border:1px solid var(--bd);color:var(--txm);cursor:pointer;transition:all .2s}
+.btn:hover{border-color:var(--red);color:var(--red)}
+.btn.active{background:rgba(255,62,62,.1);border-color:rgba(255,62,62,.4);color:var(--red)}
+.methods{margin-top:1.5rem;background:var(--bg2);border:1px solid var(--bd);padding:1.5rem;display:none}
+.methods.show{display:block}
+.methods-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.75rem;margin-top:1rem}
+.method-card{background:var(--bg);border:1px solid var(--bda);padding:.75rem}
+.method-card .icon{font-size:1rem;margin-bottom:.3rem}
+.method-card h4{font-weight:700;font-size:.8rem;margin-bottom:.3rem}
+.method-card p{font-size:.7rem;color:var(--txd);line-height:1.6}
+.progress-box{margin-top:1.5rem;padding:1.25rem;background:var(--bg2);border:1px solid var(--bd)}
+.progress-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.5rem}
+.progress-label{font-size:.6rem;letter-spacing:.3em;color:var(--txd)}
+.progress-pct{font-size:1.8rem;font-weight:800}
+.bar{width:100%;overflow:hidden}
+.bar-outer{height:6px;background:var(--bda)}
+.bar-inner{height:100%;transition:width .5s}
+.bar-grad{background:linear-gradient(90deg,#ff3e3e,#ff8c42)}
+.phase-dots{display:flex;gap:1.5rem;margin-top:.75rem;flex-wrap:wrap}
+.phase-dot{display:flex;align-items:center;gap:.4rem}
+.phase-dot .dot{width:7px;height:7px;border-radius:50%}
+.phase-dot span{font-size:.55rem;color:var(--txd)}
+.tabs{display:flex;gap:0;margin-top:1.5rem}
+.tab{font-size:.6rem;letter-spacing:.2em;padding:.6rem 1.2rem;background:0;border:1px solid transparent;border-bottom:1px solid var(--bd);color:var(--txm);cursor:pointer;margin-bottom:-1px;position:relative;z-index:0;font-family:'JetBrains Mono',monospace}
+.tab.active{background:var(--bg2);border:1px solid var(--bd);border-bottom:none;color:var(--red);z-index:1}
+.tab-fill{flex:1;border-bottom:1px solid var(--bd)}
+.phase-hdr{background:var(--bg2);border:1px solid var(--bd);padding:1rem 1.25rem;cursor:pointer;user-select:none;margin-bottom:0}
+.phase-hdr.expanded{border-color:rgba(255,62,62,.3)}
+.phase-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.phase-left{display:flex;align-items:center;gap:.75rem;flex:1;min-width:180px}
+.phase-num{font-size:1.3rem;font-weight:800;min-width:32px}
+.phase-title{font-weight:700;font-size:.9rem}
+.phase-meta{font-size:.55rem;color:var(--txm);margin-top:.1rem}
+.phase-right{display:flex;align-items:center;gap:.75rem}
+.phase-pct{font-size:.8rem;font-weight:700;min-width:36px;text-align:right}
+.arrow{color:var(--txm);font-size:1rem;transition:transform .2s}
+.arrow.open{transform:rotate(180deg)}
+.phase-body{background:var(--bg3);border:1px solid var(--bd);border-top:none;padding:1.25rem;display:none}
+.phase-body.show{display:block}
+.phase-desc{font-size:.78rem;color:var(--txd);line-height:1.7;margin-bottom:1.25rem}
+.track{background:var(--bg2);border:1px solid var(--bd);padding:1rem;margin-bottom:.75rem}
+.track-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;flex-wrap:wrap;gap:.4rem}
+.track-tags{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.tag{font-size:.5rem;letter-spacing:.2em;padding:.15rem .4rem;border:1px solid;font-family:'JetBrains Mono',monospace}
+.tag-res{border-color:rgba(74,222,128,.25);color:#4ade80;background:rgba(74,222,128,.08);cursor:pointer}
+.track-pct{font-size:.6rem;font-weight:600;color:var(--txd)}
+.track h3{font-size:.85rem;font-weight:700;margin-bottom:.4rem}
+.track-desc{font-size:.72rem;color:var(--txd);line-height:1.7;margin-bottom:.75rem}
+.res-panel{background:var(--bg);border:1px solid rgba(74,222,128,.15);padding:.6rem .8rem;margin-bottom:.75rem;display:none}
+.res-panel.show{display:block}
+.res-label{font-size:.5rem;letter-spacing:.2em;color:#4ade80;margin-bottom:.4rem}
+.res-link{display:block;font-size:.72rem;color:#22d3ee;text-decoration:none;padding:.25rem 0}
+.res-link:hover{text-decoration:underline}
+.item{display:flex;align-items:flex-start;gap:.6rem;padding:.4rem 0;cursor:pointer;user-select:none}
+.item+.item{border-top:1px solid var(--bda)}
+.checkbox{width:16px;height:16px;min-width:16px;margin-top:1px;border:1.5px solid var(--bd);display:flex;align-items:center;justify-content:center;border-radius:2px;transition:all .15s;font-size:.6rem;font-weight:800}
+.checkbox.checked{border:none}
+.item-text{font-size:.75rem;line-height:1.5;transition:all .15s}
+.item-text.checked{color:var(--txm);text-decoration:line-through}
+.milestones{background:rgba(255,62,62,.03);border:1px solid rgba(255,62,62,.12);padding:1rem;margin-top:.4rem}
+[data-theme="light"] .milestones{background:rgba(255,62,62,.05)}
+.ms-label{font-size:.55rem;letter-spacing:.3em;color:var(--red);margin-bottom:.75rem}
+.ms-item .checkbox{border-color:var(--bd)}
+.ms-item .checkbox.checked{border:2px solid #4ade80;background:#4ade80}
+.ms-item .item-text.checked{color:#4ade80;text-decoration:none}
+.cert-card{background:var(--bg2);border:1px solid var(--bd);padding:1rem 1.25rem;cursor:pointer;user-select:none;margin-bottom:.75rem}
+.cert-name{font-weight:700;font-size:.9rem}
+.cert-meta{font-size:.55rem;color:var(--txm);margin-top:.15rem}
+.cert-phase{font-size:.5rem;color:#ffd23f;margin-top:.2rem}
+.cert-body{background:var(--bg3);border:1px solid var(--bd);border-top:none;padding:1.25rem;display:none}
+.cert-body.show{display:block}
+.footer{text-align:center;margin-top:3rem;padding:2rem 0}
+.footer p{font-size:.55rem;letter-spacing:.3em;color:var(--txm)}
+.footer .ver{font-size:.5rem;color:var(--bda);margin-top:.5rem}
+</style>
+</head>
+<body data-theme="dark">
+<div class="wrap">
+<div class="hdr" id="header"></div>
+<div id="methods-panel" class="methods"></div>
+<div id="progress-box" class="progress-box"></div>
+<div id="tabs-bar" class="tabs"></div>
+</div>
+<div class="wrap"><div id="content"></div>
+<div class="footer"><p>~3,300 HOURS · 8 CERTIFICATIONS · 3 LANGUAGES · 6 PHASES</p><div class="ver mono">PANOPTIC'S ROADMAP v5.0 · 18-MONTH AI/ML MASTERY PROTOCOL</div></div>
+</div>
+<script>
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
+const S={
+  get(k){try{return JSON.parse(localStorage.getItem('panoptic-'+k))}catch(e){return null}},
+  set(k,v){try{localStorage.setItem('panoptic-'+k,JSON.stringify(v))}catch(e){}}
+};
+let checked=S.get('progress')||{};
+let userName=S.get('username')||'YOUR NAME';
+let darkMode=S.get('dark')!==false;
+let currentTab='phases';
+let expandedId=null;
+let openRes=null;
+let showMethods=false;
+let editingName=false;
+
+// ─── DATA ────────────────────────────────────────────────────────────────────
+const RES={algebra:[{n:"Khan Academy — Algebra 2",u:"https://www.khanacademy.org/math/algebra2"},{n:"Professor Leonard — Precalc",u:"https://www.youtube.com/playlist?list=PLDesaqWTN6ESsmwELdrzhcGiRhk5DjwLP"}],linAlg:[{n:"3Blue1Brown — Essence of Linear Algebra",u:"https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab"},{n:"MIT OCW 18.06",u:"https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/"},{n:"Mathematics for ML Book",u:"https://mml-book.github.io/"}],calc:[{n:"3Blue1Brown — Essence of Calculus",u:"https://www.youtube.com/playlist?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr"},{n:"Professor Leonard — Calc 1",u:"https://www.youtube.com/playlist?list=PLF797E961509B4EB5"},{n:"Paul's Online Math Notes",u:"https://tutorial.math.lamar.edu/"}],calc2:[{n:"Professor Leonard — Calc 2",u:"https://www.youtube.com/playlist?list=PLDesaqWTN6EQ2J4vgsN1HyBeRADEh4Cw-"}],calc3:[{n:"Khan Academy — Multivariable",u:"https://www.khanacademy.org/math/multivariable-calculus"},{n:"MIT OCW 18.02",u:"https://ocw.mit.edu/courses/18-02-multivariable-calculus-fall-2007/"}],prob:[{n:"StatQuest",u:"https://www.youtube.com/c/joshstarmer"},{n:"Khan Academy — Stats",u:"https://www.khanacademy.org/math/statistics-probability"},{n:"Think Stats (Free)",u:"https://greenteapress.com/thinkstats2/html/index.html"}],py:[{n:"Automate the Boring Stuff",u:"https://automatetheboringstuff.com/"},{n:"LeetCode Easy",u:"https://leetcode.com/problemset/all/?difficulty=EASY"}],sql:[{n:"SQLBolt",u:"https://sqlbolt.com/"},{n:"Mode SQL Tutorial",u:"https://mode.com/sql-tutorial"}],eda:[{n:"Kaggle — Pandas",u:"https://www.kaggle.com/learn/pandas"},{n:"Kaggle — Data Viz",u:"https://www.kaggle.com/learn/data-visualization"}],mlt:[{n:"Google ML Crash Course",u:"https://developers.google.com/machine-learning/crash-course"},{n:"StatQuest ML",u:"https://www.youtube.com/playlist?list=PLblh5JKOoLUICTaGLRoHQDuF_7q2GfuJF"}],skl:[{n:"Scikit-learn Docs",u:"https://scikit-learn.org/stable/user_guide.html"},{n:"XGBoost Docs",u:"https://xgboost.readthedocs.io/"}],pipe:[{n:"Scikit-learn Pipelines",u:"https://scikit-learn.org/stable/modules/compose.html"},{n:"Optuna",u:"https://optuna.org/"},{n:"MLflow",u:"https://mlflow.org/docs/latest/getting-started/index.html"}],pt:[{n:"PyTorch Tutorials",u:"https://pytorch.org/tutorials/"},{n:"Karpathy — Zero to Hero",u:"https://www.youtube.com/playlist?list=PLAqhIrjkxbuWI23v9cThsA9GvCAUhRvKZ"},{n:"fast.ai",u:"https://course.fast.ai/"}],dl:[{n:"Coursera — DL Spec",u:"https://www.coursera.org/specializations/deep-learning"}],cpp:[{n:"learncpp.com",u:"https://www.learncpp.com/"}],tx:[{n:"Karpathy — Let's Build GPT",u:"https://www.youtube.com/watch?v=kCc8FmEb1nY"},{n:"Illustrated Transformer",u:"https://jalammar.github.io/illustrated-transformer/"}],disc:[{n:"MIT OCW 6.042",u:"https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-fall-2010/"}],dock:[{n:"Docker Getting Started",u:"https://docs.docker.com/get-started/"},{n:"FastAPI Tutorial",u:"https://fastapi.tiangolo.com/tutorial/"}],info:[{n:"Visual Information Theory",u:"https://colah.github.io/posts/2015-09-Visual-Information/"}],llm:[{n:"HuggingFace PEFT",u:"https://huggingface.co/docs/peft/"},{n:"vLLM Docs",u:"https://docs.vllm.ai/"}],ops:[{n:"MLflow Registry",u:"https://mlflow.org/docs/latest/model-registry.html"},{n:"Made With ML",u:"https://madewithml.com/"}],cuda:[{n:"CUDA Guide",u:"https://docs.nvidia.com/cuda/cuda-c-programming-guide/"}],biz:[{n:"YC Startup School",u:"https://www.startupschool.org/"}],deq:[{n:"3Blue1Brown — Diff Eq",u:"https://www.youtube.com/playlist?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6"},{n:"MIT OCW 18.03",u:"https://ocw.mit.edu/courses/18-03-differential-equations-spring-2010/"}],infra:[{n:"Triton Docs",u:"https://docs.nvidia.com/deeplearning/triton-inference-server/"},{n:"Kubernetes Tutorials",u:"https://kubernetes.io/docs/tutorials/"}]};
+
+const METH=[{i:"🧠",t:"Active Recall",d:"Close material, write everything from memory. Test yourself before reviewing."},{i:"🔄",t:"Spaced Repetition",d:"Review at 1d→3d→7d→14d→30d. Use Anki for formulas & vocab."},{i:"🎓",t:"Feynman Technique",d:"Explain each concept as if teaching a 12-year-old."},{i:"🔀",t:"Interleaving",d:"Mix math, code, and ML in one session."},{i:"🛠️",t:"Build Immediately",d:"Every paper concept → code within 48 hours."},{i:"📝",t:"Weekly Consolidation",d:"Sunday: summarize week, find gaps, plan next week."}];
+
+const CERTS=[
+{id:"c1",nm:"Deep Learning Specialization",org:"DeepLearning.AI",lv:"Specialization",fc:"Neural Networks, CNNs, RNNs, Transformers",ph:"Phases 1–3",tg:"Month 9",rs:[{n:"Coursera — DL Spec",u:"https://www.coursera.org/specializations/deep-learning"}],items:["Course 1 — Neural Networks & Deep Learning","Course 2 — Improving Deep Neural Networks","Course 3 — Structuring ML Projects","Course 4 — CNNs","Course 5 — Sequence Models"]},
+{id:"c2",nm:"NVIDIA NCA-AIIO",org:"NVIDIA",lv:"Associate",fc:"AI Infrastructure & Ops",ph:"Phase 4",tg:"Month 11",rs:[{n:"NVIDIA Cert Portal",u:"https://www.nvidia.com/en-us/training/certification/"}],items:["GPU architecture fundamentals","CUDA basics","Containerized ML workloads","Inference optimization","EXAM PASSED"]},
+{id:"c3",nm:"Google Cloud Professional MLE",org:"Google",lv:"Professional",fc:"MLOps & Vertex AI",ph:"Phase 4",tg:"Month 12",rs:[{n:"GCP MLE Guide",u:"https://cloud.google.com/learn/certification/machine-learning-engineer"}],items:["Vertex AI pipelines","BigQuery ML & Dataflow","Deployment & monitoring","Responsible AI","EXAM PASSED"]},
+{id:"c4",nm:"AWS GenAI Developer",org:"AWS",lv:"Professional",fc:"Scalable Agents & RAG",ph:"Phase 5",tg:"Month 15",rs:[{n:"AWS Cert Portal",u:"https://aws.amazon.com/certification/"},{n:"AWS Skill Builder",u:"https://explore.skillbuilder.aws/"}],items:["Bedrock & foundation models","RAG on AWS","Agent frameworks","Scalable GenAI deploy","EXAM PASSED"]},
+{id:"c5",nm:"AWS ML Specialty",org:"AWS",lv:"Specialty",fc:"End-to-End ML on AWS",ph:"Phase 6",tg:"Month 17",rs:[{n:"AWS ML Specialty Guide",u:"https://aws.amazon.com/certification/certified-machine-learning-specialty/"}],items:["SageMaker E2E","Data engineering (S3, Glue, Kinesis)","ML design patterns","Cost optimization","EXAM PASSED"]},
+{id:"c6",nm:"NVIDIA NCP-AIO",org:"NVIDIA",lv:"Professional",fc:"AI Infrastructure & Ops",ph:"Phase 6+",tg:"Month 20+",rs:[{n:"NVIDIA DLI",u:"https://www.nvidia.com/en-us/training/"}],items:["NGC enterprise tools","Triton mastery","TensorRT optimization","Multi-GPU orchestration","DGX Cloud ops","EXAM PASSED"]},
+{id:"c7",nm:"NVIDIA CUDA",org:"NVIDIA",lv:"Advanced",fc:"GPU Kernel Optimization",ph:"Phase 5–6",tg:"Month 18+",rs:[{n:"CUDA Guide",u:"https://docs.nvidia.com/cuda/cuda-c-programming-guide/"}],items:["CUDA memory model","Kernel optimization","Shared memory & coalescing","Warp-level programming","Nsight profiling","EXAM PASSED"]},
+{id:"c8",nm:"CKA — Kubernetes Admin",org:"CNCF",lv:"Admin",fc:"Kubernetes",ph:"Phase 6",tg:"Month 18",rs:[{n:"Kubernetes Docs",u:"https://kubernetes.io/docs/"},{n:"KodeKloud CKA",u:"https://kodekloud.com/courses/certified-kubernetes-administrator-cka/"},{n:"Killer.sh",u:"https://killer.sh/"}],items:["Cluster architecture","Workloads & scheduling","Services & networking","Storage","Troubleshooting & security","EXAM PASSED"]},
+];
+
+const catColors={MATH:{c:"#ff3e3e",b:"rgba(255,62,62,.08)",r:"rgba(255,62,62,.25)"},CODE:{c:"#22d3ee",b:"rgba(34,211,238,.08)",r:"rgba(34,211,238,.25)"},ML:{c:"#a78bfa",b:"rgba(167,139,250,.08)",r:"rgba(167,139,250,.25)"},CERT:{c:"#ffd23f",b:"rgba(255,210,63,.08)",r:"rgba(255,210,63,.25)"},BIZ:{c:"#4ade80",b:"rgba(74,222,128,.08)",r:"rgba(74,222,128,.25)"},PROJECT:{c:"#ff8c42",b:"rgba(255,140,66,.08)",r:"rgba(255,140,66,.25)"},INFRA:{c:"#f472b6",b:"rgba(244,114,182,.08)",r:"rgba(244,114,182,.25)"}};
+
+const PHASES=[
+{id:"p1",n:"01",t:"IGNITION",m:"MONTHS 1–3",h:"~550 HRS",c:"#ff3e3e",d:"Python foundations, algebra through precalculus, SQL, ML vocabulary, Deep Learning Spec begins.",tracks:[
+{id:"p1t1",cat:"MATH",h:"~15h/wk",t:"Algebra 2 → Precalculus → LA Entry",r:"algebra",d:"Active Recall: derive 3 problems from memory after each session.",items:["Polynomials & rational expressions","Exponential & logarithmic functions","Trig functions & unit circle","Limits as bridge to calculus","Vectors & matrix ops in NumPy"]},
+{id:"p1t2",cat:"CODE",h:"~12h/wk",t:"Zero to Intermediate Python",r:"py",d:"Build Immediately: every concept becomes a script same day.",items:["Variables, types, control flow, functions","List comprehensions & strings","File I/O — CSV, JSON, TXT","OOP — classes, inheritance, magic methods","Data structures (lists, dicts, sets, tuples)","Decorators, generators, context managers","Build 3+ tools","Git from day one"]},
+{id:"p1t3",cat:"CODE",h:"~5h/wk",t:"SQL Fundamentals",r:"sql",d:"Feynman: explain each JOIN in plain English.",items:["SELECT, WHERE, GROUP BY, aggregates","All JOIN types on 3+ tables","Subqueries and CTEs","Window functions (ROW_NUMBER, RANK, LAG)"]},
+{id:"p1t4",cat:"ML",h:"~6h/wk",t:"Core ML Theory & Vocabulary",r:"mlt",d:"Anki flashcards with Spaced Repetition for every term.",items:["Supervised vs Unsupervised vs RL","Parameters vs Hyperparameters","Overfitting vs Underfitting","Train/Test Split & Cross-Validation","Data Leakage","Standardization vs Normalization","Sampling types","Preprocessing (nulls, encoding)","Metrics: Confusion Matrix, Precision, Recall, F1","Metrics: MAE, MSE, RMSE"]},
+{id:"p1t5",cat:"CERT",h:"~6h/wk",t:"DL Spec — Courses 1 & 2",r:"dl",d:"Weekly Consolidation: summarize lectures in your own words.",items:["Course 1 — Neural Networks & DL","Course 2 — Improving DNNs","Explain gradient descent plainly","Understand regularization"]},
+],ms:["Solve precalculus without reference","Python 200+ lines with OOP","SQL JOINs & window functions","All ML vocab from memory","Explain neural nets & gradient descent"]},
+{id:"p2",n:"02",t:"CORE MATHEMATICS",m:"MONTHS 4–6",h:"~550 HRS",c:"#ff8c42",d:"Linear algebra & Calculus 1. EDA mandatory — plot first, model second.",tracks:[
+{id:"p2t1",cat:"MATH",h:"~16h/wk",t:"Linear Algebra — Full Depth",r:"linAlg",d:"Every theorem → NumPy + PyTorch implementation.",items:["Matrix multiplication & transforms","Determinants","Eigenvalues & eigenvectors","SVD","LU decomposition","All in NumPy + PyTorch"]},
+{id:"p2t2",cat:"MATH",h:"~10h/wk",t:"Calculus 1 — Derivatives & Chain Rule",r:"calc",d:"Feynman: explain every rule to non-math person.",items:["Limits (formal)","All derivative rules","Optimization (min/max)","Fundamental Theorem of Calculus","Integration (substitution, by parts)","Chain rule → backpropagation"]},
+{id:"p2t3",cat:"CODE",h:"~8h/wk",t:"Scientific Python, EDA & Visualization",r:"eda",d:"ALWAYS plot before modeling.",items:["NumPy advanced","Pandas wrangling","Matplotlib plots","Seaborn visualization","EDA: distributions first","EDA: correlations, missing values","Full EDA on Iris","Full EDA on Titanic","Full EDA on Boston Housing","Pipeline: load→EDA→clean→visualize"]},
+{id:"p2t4",cat:"CODE",h:"~4h/wk",t:"C++ Foundations",r:"cpp",d:"Eliminate fear for ML codebases.",items:["Types, pointers, references","Memory management","Functions & control flow","No memory leaks"]},
+{id:"p2t5",cat:"CERT",h:"~6h/wk",t:"DL Spec — Courses 3 & 4",r:"dl",d:"Active Recall after each lecture.",items:["Course 3 — ML Strategy","Course 4 — CNNs","Transfer learning decisions"]},
+],ms:["Matrix decomposition by hand & NumPy","Derive backprop via chain rule","Full EDA on 3 datasets","Complete data pipeline","C++ with proper memory mgmt"]},
+{id:"p3",n:"03",t:"PROBABILITY & FIRST MODELS",m:"MONTHS 7–9",h:"~550 HRS",c:"#ffd23f",d:"Prob & stats. Full algorithm depth. Pipelines, MLflow, PyTorch. DL Spec wraps.",tracks:[
+{id:"p3t1",cat:"MATH",h:"~14h/wk",t:"Probability & Statistics",r:"prob",d:"Anki for distributions. Feynman: Bayes' Theorem with real example.",items:["Distributions (Gaussian, Bernoulli, Poisson)","Bayes' Theorem","MLE","Hypothesis testing","CLT & confidence intervals","Bayesian stats","Covariance & correlation"]},
+{id:"p3t2",cat:"MATH",h:"~6h/wk",t:"Calculus 2",r:"calc2",d:"Taylor series = neural nets as approximators.",items:["Advanced integration","Taylor series","Convergence tests","Power series","Improper integrals"]},
+{id:"p3t3",cat:"ML",h:"~12h/wk",t:"Classical ML — Full Depth",r:"skl",d:"Deliberate order. Math → scratch → scikit-learn.",items:["Linear Regression on Boston Housing","Ridge, Lasso, ElasticNet","Logistic Regression on Titanic","Naive Bayes","Decision Trees by hand","Random Forest","Gradient Boosting","XGBoost & LightGBM","SVM & kernel trick","K-Means on Iris","HDBSCAN","PCA → eigenvalues","PIMA Diabetes — imbalance"]},
+{id:"p3t4",cat:"ML",h:"~4h/wk",t:"Pipelines & Tracking",r:"pipe",d:"Every experiment tracked. Professional workflows.",items:["ColumnTransformer","Custom transformers","Full Pipeline object","GridSearchCV","RandomizedSearchCV","Optuna","MLflow setup","Track all runs"]},
+{id:"p3t5",cat:"ML",h:"~4h/wk",t:"PyTorch Fundamentals",r:"pt",d:"Explicit training loops from scratch.",items:["Tensors & autograd","nn.Module & activations","DataLoaders","MNIST training loop","CIFAR-10 CNN"]},
+{id:"p3t6",cat:"CERT",h:"~6h/wk",t:"DL Course 5 + GCP Prep",r:"dl",d:"RNNs, attention, Transformers.",items:["Course 5 — Sequence Models","DL Spec CERTIFIED","Vertex AI understood","BigQuery ML","GCP practice exams"]},
+{id:"p3t7",cat:"CODE",h:"~4h/wk",t:"C++ OOP & STL",r:"cpp",d:"Read real ML codebases.",items:["OOP in C++","STL containers","Templates","PyTorch C++ frontend"]},
+],ms:["Derive MLE for Gaussian & Bernoulli","DL Spec ALL 5 CERTIFIED","Every algorithm on assigned datasets","Pipeline + ColumnTransformer + tuning","10+ MLflow experiments","PyTorch net end-to-end","Kaggle top 50%"]},
+{id:"p4",n:"04",t:"MULTIVARIATE & DEEP SYSTEMS",m:"MONTHS 10–12",h:"~550 HRS",c:"#4ade80",d:"Calculus 3, discrete math, Transformers, Docker, FastAPI, data ingestion. Two certs.",tracks:[
+{id:"p4t1",cat:"MATH",h:"~12h/wk",t:"Calculus 3 — Multivariate",r:"calc3",d:"The math inside training loops.",items:["Partial derivatives & gradients","Multivariable chain rule","Jacobian","Hessian","Lagrange multipliers","Multiple integrals"]},
+{id:"p4t2",cat:"MATH",h:"~6h/wk",t:"Discrete Mathematics",r:"disc",d:"Graph theory for agents. Complexity analysis.",items:["Logic","Set theory","Graph theory","Combinatorics","NetworkX"]},
+{id:"p4t3",cat:"ML",h:"~10h/wk",t:"Transformer Architecture",r:"tx",d:"Implement from scratch. Feynman: explain attention.",items:["Self-attention from scratch","Full Transformer in PyTorch","Small language model","ViT","Mixed-precision training","BERT vs GPT vs T5"]},
+{id:"p4t4",cat:"CODE",h:"~6h/wk",t:"Docker, Ingestion & Serving",r:"dock",d:"Every project containerized. Real data. FastAPI serving.",items:["Docker fundamentals","Containerize ML env","REST API consumption","Web scraping","Ingestion pipeline","FastAPI endpoint","Serve model via API","E2E API testing"]},
+{id:"p4t5",cat:"CERT",h:"~8h/wk",t:"NVIDIA NCA + GCP MLE Exams",r:"dl",d:"Both exams this phase.",items:["NVIDIA NCA-AIIO PASSED","GCP MLE PASSED","GPU arch solid","Production ML on GCP"]},
+],ms:["Gradients, Jacobians, Hessians by hand","Transformer from scratch","All projects in Docker","Model served via FastAPI","NVIDIA NCA-AIIO ✓","GCP MLE ✓"]},
+{id:"p5",n:"05",t:"ADVANCED THEORY & LLM",m:"MONTHS 13–15",h:"~550 HRS",c:"#22d3ee",d:"Info theory, optimization. LLMs. MLOps. CUDA. Business. AWS GenAI cert.",tracks:[
+{id:"p5t1",cat:"MATH",h:"~10h/wk",t:"Information Theory & Optimization",r:"info",d:"Entropy IS your loss function.",items:["Entropy & cross-entropy","KL Divergence","Derive SGD, Momentum, Adam","Lagrange multipliers","Numerical stability"]},
+{id:"p5t2",cat:"ML",h:"~14h/wk",t:"LLM Deep Dive",r:"llm",d:"Fine-tuning, RLHF, quantization, inference, RAG, agents.",items:["LoRA vs QLoRA","RLHF & DPO","Quantization (GPTQ, AWQ)","KV-cache optimization","Fine-tune with LoRA","Deploy with vLLM","RAG with vector DB","Agent with tools"]},
+{id:"p5t3",cat:"INFRA",h:"~4h/wk",t:"MLOps & Production",r:"ops",d:"Notebooks → production.",items:["MLflow Registry","Retraining pipeline","Great Expectations","Drift detection","Continuous learning","ML tests","CI/CD"]},
+{id:"p5t4",cat:"CODE",h:"~4h/wk",t:"C++ & CUDA",r:"cuda",d:"Infrastructure roles.",items:["Multi-threading & RAII","Move semantics","CUDA model","CUDA matmul kernel","C++ inference engine"]},
+{id:"p5t5",cat:"BIZ",h:"~4h/wk",t:"Business Thinking 1",r:"biz",d:"Revenue as function.",items:["Unit economics","SaaS metrics","5 AI business models","Zero to One","YC Startup School"]},
+{id:"p5t6",cat:"CERT",h:"~6h/wk",t:"AWS GenAI Developer Prep",r:"dl",d:"Bedrock, agents, RAG on AWS.",items:["Bedrock & models","RAG on AWS","Agent frameworks","Practice exams 75%+"]},
+],ms:["Cross-entropy from info theory","LLM fine-tune + deploy pipeline","CUDA matmul running","Validate→train→version→deploy→monitor","5 AI business models from memory"]},
+{id:"p6",n:"06",t:"MASTERY & WEAPONIZATION",m:"MONTHS 16–18",h:"~550 HRS",c:"#a78bfa",d:"Diff equations, production portfolio, infrastructure, AWS ML, CKA, NVIDIA prep.",tracks:[
+{id:"p6t1",cat:"MATH",h:"~8h/wk",t:"Differential Equations",r:"deq",d:"Neural ODEs, diffusion models.",items:["First-order ODEs","Numerical methods","Neural ODEs","Diffusion process","Score matching"]},
+{id:"p6t2",cat:"PROJECT",h:"~14h/wk",t:"Capstone — Production Grade",r:"pt",d:"Docker, CI/CD, MLflow, FastAPI, docs on every project.",items:["NeuralForge — Docker + CI/CD","NeuralForge — distributed","NeuralForge — MLflow + W&B","NeuralForge — FastAPI","Rix — hardware deployed","Rix — speech + personality","Rix — RAG operational","NEW capstone","All repos documented","All containerized"]},
+{id:"p6t3",cat:"INFRA",h:"~8h/wk",t:"Production Infrastructure",r:"infra",d:"Triton, TensorRT, K8s, distributed training.",items:["Triton","TensorRT","Kubernetes","Monitoring at scale","A/B testing","FSDP","Feature store","Kubeflow/Airflow","Cloud data (S3, BigQuery)"]},
+{id:"p6t4",cat:"BIZ",h:"~4h/wk",t:"Business Thinking 2",r:"biz",d:"Model your opportunities.",items:["ML business analysis","Defense tech models","Python startup sim","Market→funnel→economics→moat"]},
+{id:"p6t5",cat:"CERT",h:"~6h/wk",t:"AWS ML + CKA + NVIDIA Prep",r:"infra",d:"AWS exam, CKA, NVIDIA pro certs.",items:["AWS ML Specialty PASSED","CKA prep","CKA PASSED","NVIDIA NCP study","NVIDIA CUDA study"]},
+],ms:["Diffusion models math→code","AWS ML Specialty ✓","CKA ✓","3+ production projects","Full stack whiteboard","Business opportunity modeled"]},
+];
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function pct(d,t){return t?Math.round(d/t*100):0}
+function trkProg(tr){const d=tr.items.filter((_,i)=>checked[tr.id+'-'+i]).length;return{d,t:tr.items.length,p:pct(d,tr.items.length)}}
+function phsProg(ph){let d=0,t=0;ph.tracks.forEach(tr=>{tr.items.forEach((_,i)=>{t++;if(checked[tr.id+'-'+i])d++})});ph.ms.forEach((_,i)=>{t++;if(checked[ph.id+'-m-'+i])d++});return{d,t,p:pct(d,t)}}
+function crtProg(c){const d=c.items.filter((_,i)=>checked[c.id+'-'+i]).length;return{d,t:c.items.length,p:pct(d,c.items.length)}}
+function allProg(){let d=0,t=0;PHASES.forEach(p=>{p.tracks.forEach(tr=>{tr.items.forEach((_,i)=>{t++;if(checked[tr.id+'-'+i])d++})});p.ms.forEach((_,i)=>{t++;if(checked[p.id+'-m-'+i])d++})});CERTS.forEach(c=>{c.items.forEach((_,i)=>{t++;if(checked[c.id+'-'+i])d++})});return{d,t,p:pct(d,t)}}
+function toggle(k){checked[k]=!checked[k];if(!checked[k])delete checked[k];S.set('progress',checked);render();}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function render(){
+  document.body.setAttribute('data-theme',darkMode?'dark':'light');
+  const ov=allProg();
+
+  // Header
+  document.getElementById('header').innerHTML=`
+    <div class="hdr-top">
+      <div>
+        <div class="mono hdr-nm">${editingName?`<input id="nameInput" value="${userName}" />`:`<span class="editable" id="editName">${userName}</span>`}<span style="color:var(--txm)">· 18 MONTHS</span></div>
+        <h1>PANOPTIC'S<br>ROADMAP</h1>
+        <div class="mono sub">v5.0 · ${ov.d}/${ov.t} ITEMS</div>
+      </div>
+      <div class="btns">
+        <button class="btn ${showMethods?'active':''}" id="btnMethod">HOW TO LEARN</button>
+        <button class="btn" id="btnTheme">${darkMode?'☀ LIGHT':'◑ DARK'}</button>
+        <button class="btn" id="btnReset">RESET</button>
+      </div>
+    </div>`;
+
+  // Methods
+  const mp=document.getElementById('methods-panel');
+  mp.className='methods'+(showMethods?' show':'');
+  mp.innerHTML=`<div class="mono" style="font-size:.6rem;letter-spacing:.3em;color:var(--red)">COMPOUND LEARNING METHODOLOGY</div>
+    <div class="methods-grid">${METH.map(m=>`<div class="method-card"><div class="icon">${m.i}</div><h4>${m.t}</h4><p>${m.d}</p></div>`).join('')}</div>`;
+
+  // Progress
+  document.getElementById('progress-box').innerHTML=`
+    <div class="progress-top"><span class="mono progress-label">OVERALL</span><span class="mono progress-pct" style="color:${ov.p===100?'#4ade80':'#ff3e3e'}">${ov.p}%</span></div>
+    <div class="bar-outer"><div class="bar-inner bar-grad" style="width:${ov.p}%"></div></div>
+    <div class="phase-dots">${PHASES.map(p=>{const pp=phsProg(p);return`<div class="phase-dot"><div class="dot" style="background:${p.c};opacity:${pp.p>0?1:.3}"></div><span class="mono">P${p.n} ${pp.p}%</span></div>`}).join('')}</div>`;
+
+  // Tabs
+  document.getElementById('tabs-bar').innerHTML=`
+    <button class="tab ${currentTab==='phases'?'active':''}" data-tab="phases">PHASES</button>
+    <button class="tab ${currentTab==='certs'?'active':''}" data-tab="certs">CERTIFICATIONS</button>
+    <div class="tab-fill"></div>`;
+
+  // Content
+  const content=document.getElementById('content');
+  if(currentTab==='phases'){
+    content.innerHTML=PHASES.map(phase=>{
+      const pp=phsProg(phase);const isE=expandedId===phase.id;
+      return`<div style="margin-bottom:.75rem">
+        <div class="phase-hdr ${isE?'expanded':''}" data-expand="${phase.id}" style="${isE?'border-color:'+phase.c+'60':''}">
+          <div class="phase-row">
+            <div class="phase-left"><span class="mono phase-num" style="color:${phase.c}">${phase.n}</span><div><div class="phase-title">${phase.t}</div><div class="mono phase-meta">${phase.m} · ${phase.h}</div></div></div>
+            <div class="phase-right"><div class="bar-outer" style="width:100px;height:5px"><div class="bar-inner" style="width:${pp.p}%;background:${pp.p===100?'#4ade80':phase.c}"></div></div><span class="mono phase-pct" style="color:${pp.p===100?'#4ade80':phase.c}">${pp.p}%</span><span class="arrow ${isE?'open':''}">▾</span></div>
+          </div>
+        </div>
+        ${isE?`<div class="phase-body show"><p class="phase-desc">${phase.d}</p>
+          ${phase.tracks.map(track=>{
+            const tp=trkProg(track);const s=catColors[track.cat]||catColors.CODE;const res=track.r?RES[track.r]:null;const ro=openRes===track.id;
+            return`<div class="track">
+              <div class="track-top"><div class="track-tags"><span class="tag mono" style="color:${s.c};border-color:${s.r};background:${s.b}">${track.cat}</span><span class="mono" style="font-size:.5rem;color:var(--txm)">${track.h}</span>${res?`<span class="tag tag-res mono" data-res="${track.id}">${ro?'HIDE':'RESOURCES'}</span>`:''}</div><span class="mono track-pct" style="color:${tp.p===100?'#4ade80':'var(--txd)'}">${tp.d}/${tp.t} · ${tp.p}%</span></div>
+              <h3>${track.t}</h3><p class="track-desc">${track.d}</p>
+              ${ro&&res?`<div class="res-panel show"><div class="mono res-label">RESOURCES</div>${res.map(r=>`<a class="res-link" href="${r.u}" target="_blank">${r.n} <span style="color:var(--txm);font-size:.6rem">↗</span></a>`).join('')}</div>`:''}
+              <div class="bar-outer" style="height:3px;margin-bottom:.75rem"><div class="bar-inner" style="width:${tp.p}%;background:${tp.p===100?'#4ade80':s.c}"></div></div>
+              ${track.items.map((item,i)=>{const k=track.id+'-'+i;const ic=!!checked[k];return`<div class="item" data-key="${k}"><div class="checkbox ${ic?'checked':''}" style="${ic?'background:'+s.c+';border:none':''}"><span style="color:${darkMode?'#0a0a0c':'#fff'}">${ic?'✓':''}</span></div><span class="item-text ${ic?'checked':''}">${item}</span></div>`}).join('')}
+            </div>`}).join('')}
+          <div class="milestones"><div class="mono ms-label">PHASE ${phase.n} EXIT MILESTONES</div>
+            ${phase.ms.map((m,i)=>{const k=phase.id+'-m-'+i;const ic=!!checked[k];return`<div class="item ms-item" data-key="${k}"><div class="checkbox ${ic?'checked':''}" style="${ic?'background:#4ade80;border:2px solid #4ade80':''}">${ic?'<span style="color:#0a0a0c">★</span>':''}</div><span class="item-text ${ic?'checked':''}">${m}</span></div>`}).join('')}
+          </div>
+        </div>`:''}
+      </div>`}).join('');
+  } else {
+    content.innerHTML=`<p style="font-size:.78rem;color:var(--txd);line-height:1.7;margin:.5rem 0 1.25rem">8 certifications sequenced across 18 months. Each timed to land when you have the skills to back it up.</p>
+    ${CERTS.map(cert=>{
+      const cp=crtProg(cert);const isE=expandedId===cert.id;
+      return`<div style="margin-bottom:.75rem">
+        <div class="cert-card" data-expand="${cert.id}" style="${isE?'border-color:#ffd23f60':''}">
+          <div class="phase-row"><div style="flex:1;min-width:200px"><div class="cert-name">${cert.nm}</div><div class="mono cert-meta">${cert.org} · ${cert.lv} · ${cert.fc}</div><div class="mono cert-phase">${cert.ph} · TARGET: ${cert.tg}</div></div>
+          <div class="phase-right"><div class="bar-outer" style="width:80px;height:5px"><div class="bar-inner" style="width:${cp.p}%;background:${cp.p===100?'#4ade80':'#ffd23f'}"></div></div><span class="mono phase-pct" style="color:${cp.p===100?'#4ade80':'#ffd23f'}">${cp.p}%</span><span class="arrow ${isE?'open':''}">▾</span></div></div>
+        </div>
+        ${isE?`<div class="cert-body show">
+          ${cert.rs?`<div class="res-panel show"><div class="mono res-label">STUDY RESOURCES</div>${cert.rs.map(r=>`<a class="res-link" href="${r.u}" target="_blank">${r.n} ↗</a>`).join('')}</div>`:''}
+          <div class="bar-outer" style="height:3px;margin-bottom:.75rem"><div class="bar-inner" style="width:${cp.p}%;background:${cp.p===100?'#4ade80':'#ffd23f'}"></div></div>
+          ${cert.items.map((item,i)=>{const k=cert.id+'-'+i;const ic=!!checked[k];return`<div class="item" data-key="${k}"><div class="checkbox ${ic?'checked':''}" style="${ic?'background:#ffd23f;border:none':''}"><span style="color:#0a0a0c">${ic?'✓':''}</span></div><span class="item-text ${ic?'checked':''}">${item}</span></div>`}).join('')}
+        </div>`:''}
+      </div>`}).join('')}`;
+  }
+
+  // Bind events
+  document.querySelectorAll('[data-key]').forEach(el=>el.onclick=()=>toggle(el.dataset.key));
+  document.querySelectorAll('[data-expand]').forEach(el=>el.onclick=()=>{expandedId=expandedId===el.dataset.expand?null:el.dataset.expand;render()});
+  document.querySelectorAll('[data-tab]').forEach(el=>el.onclick=()=>{currentTab=el.dataset.tab;expandedId=null;render()});
+  document.querySelectorAll('[data-res]').forEach(el=>el.onclick=e=>{e.stopPropagation();openRes=openRes===el.dataset.res?null:el.dataset.res;render()});
+  const btnM=document.getElementById('btnMethod');if(btnM)btnM.onclick=()=>{showMethods=!showMethods;render()};
+  const btnT=document.getElementById('btnTheme');if(btnT)btnT.onclick=()=>{darkMode=!darkMode;S.set('dark',darkMode);render()};
+  const btnR=document.getElementById('btnReset');if(btnR)btnR.onclick=()=>{if(confirm('Reset ALL progress?')){checked={};S.set('progress',{});render()}};
+  const editN=document.getElementById('editName');if(editN)editN.onclick=()=>{editingName=true;render();const inp=document.getElementById('nameInput');if(inp){inp.focus();inp.onblur=()=>{userName=inp.value||'YOUR NAME';editingName=false;S.set('username',userName);render()};inp.onkeydown=e=>{if(e.key==='Enter'){userName=inp.value||'YOUR NAME';editingName=false;S.set('username',userName);render()}}}};
+}
+
+render();
+</script>
+</body>
+</html>
