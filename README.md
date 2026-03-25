@@ -14,7 +14,7 @@ A comprehensive, trackable roadmap for going from beginner to elite AI/ML engine
 - **Zero dependencies** — pure HTML/CSS/JS, works offline
 
 ## Live Site
-👉 **[https://panopt-c.github.io/panoptics-roadmap]((https://panopt-c.github.io/panoptics-roadmap/))**
+👉 **[https://panopt-c.github.io/panoptics-roadmap]([(https://panopt-c.github.io/panoptics-roadmap/))]**
 
 ## How to Use
 1. Visit the live site above, or download `index.html` and open in any browser
