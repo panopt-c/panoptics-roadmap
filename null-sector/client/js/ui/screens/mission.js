@@ -168,7 +168,7 @@ export class MissionScreen {
   #busy = false;
   #leaving = false;
   #attempts = 0;
-  #rows = []; // {el, icon, state, intel, seg, shards}
+  #rows = []; // {el, icon, state, intelMsg, intelHint, seg, shards, objective}
   #artLines = [];
   #artCols = 0;
   #animations = new Set();
@@ -503,7 +503,6 @@ export class MissionScreen {
         r.logOutput,
       ),
     );
-    r.codePanel = panel;
     this.#showLog('combat');
     return panel;
   }
@@ -567,7 +566,7 @@ export class MissionScreen {
         intel,
       );
       r.layers.append(el);
-      return { el, icon, state, intel, intelMsg, intelHint, seg, shards, objective: r.objectives[i] };
+      return { el, icon, state, intelMsg, intelHint, seg, shards, objective: r.objectives[i] };
     });
 
     r.hackLabel = h('span', { class: 'hack-btn__label' }, 'HACK');

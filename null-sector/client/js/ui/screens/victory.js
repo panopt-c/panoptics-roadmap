@@ -97,6 +97,8 @@ export class VictoryScreen {
       return true;
     }
     if (e.key === 'Enter') {
+      // A focused button (Tab navigation) activates itself natively.
+      if (e.target instanceof HTMLButtonElement && this.el.contains(e.target) && e.target !== this.#r.primary) return false;
       e.preventDefault();
       if (this.#mission.cutscene) this.#play(true);
       else this.#hub(true);
@@ -118,7 +120,7 @@ export class VictoryScreen {
     const reward = result.reward || { lines: [], gained: 0, replay: true };
     const profile = result.state?.profile || {};
 
-    r.title = h('h1', { class: 'victory__title', 'data-text': 'ACCESS GRANTED' }, ' ');
+    r.title = h('h1', { class: 'victory__title' }, ' ');
     r.deleted = h(
       'div',
       { class: 'victory__deleted stamp' },

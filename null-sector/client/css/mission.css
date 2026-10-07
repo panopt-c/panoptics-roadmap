@@ -5,8 +5,10 @@
  * .icon-btn) come from app.css; this file only lays them out and adds what is unique to
  * combat: the enemy stage, firewall HP shards, the layer list, the HACK button states and
  * the combat log. Glow is earned: only the live timer, the enemy and HACK emit light.
- * Everything that moves is transform/opacity (compositor-only) except the INTEL expand,
- * which animates grid-template-rows once per hack.
+ * Continuous animations (breathing, scan, glitch ghosts, live dot) are transform/opacity or
+ * stepped clip-paths, so idle frames stay on the compositor; paint-touching effects (row
+ * flashes, filters, the INTEL grid-rows expand, the death glitch) are short one-shots on small
+ * elements. One-shot reactions are driven from mission.js with the Web Animations API.
  */
 
 .screen.screen--mission {
@@ -465,7 +467,6 @@
     rgba(var(--cyan-rgb), 0.38) 98%,
     rgba(var(--cyan-rgb), 0) 100%
   );
-  will-change: transform;
 }
 
 .screen--mission.is-charging .mission-code__scan {
@@ -842,6 +843,7 @@
 .enemy__art {
   position: relative;
   display: inline-block;
+  will-change: transform;
   margin: 0;
   font-family: var(--font-mono);
   font-size: var(--art-size, 24px);
@@ -1074,7 +1076,6 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(to bottom, #ff6a82, #e3203f 70%, #b5122c);
-  will-change: transform, opacity;
 }
 
 .hp__shard--0 {
@@ -1535,15 +1536,14 @@
   }
 }
 
+/* transform only (compositor): the glow pulse lives on .enemy__aura's opacity */
 @keyframes enemy-breathe {
   0%,
   100% {
     transform: scale(1);
-    filter: brightness(0.92);
   }
   50% {
     transform: scale(1.025);
-    filter: brightness(1.12);
   }
 }
 

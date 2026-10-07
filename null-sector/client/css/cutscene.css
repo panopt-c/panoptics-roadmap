@@ -443,14 +443,16 @@
 /* reduced motion: the OS preference or the in-game setting (main.js → body.reduce-motion) */
 body.reduce-motion .cs-layer__media,
 body.reduce-motion .cs-leak,
-body.reduce-motion .cs-title.is-in .cs-title__name {
+body.reduce-motion .cs-title.is-in .cs-title__name,
+body.reduce-motion .cs-line::after {
   animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-layer__media,
   .cs-leak,
-  .cs-title.is-in .cs-title__name {
+  .cs-title.is-in .cs-title__name,
+  .cs-line::after {
     animation: none;
   }
 }

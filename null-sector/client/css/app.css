@@ -126,6 +126,16 @@ samp {
   font-family: var(--font-mono);
 }
 
+/* Players are learning what to type: show `->`, `!=`, `<=` as typed, never as ligature glyphs. */
+code,
+kbd,
+pre,
+samp,
+.mono,
+.kbd {
+  font-variant-ligatures: none;
+}
+
 /* ── layers (§4.3) ─────────────────────────────────────────────────────── */
 #gl {
   position: fixed;
@@ -1114,7 +1124,7 @@ body.no-webgl #fallback-bg {
   min-width: 360px;
   max-width: calc(100vw - 32px);
   padding: 10px 12px 10px 16px;
-  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.04)), rgba(12, 10, 6, 0.9);
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.04)), rgba(10, 9, 8, 0.97);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.5);
@@ -3022,10 +3032,15 @@ body.no-webgl #fallback-bg {
 }
 
 .lightbox__frame {
+  --c: 14px;
   position: relative;
   display: grid;
-  gap: 12px;
-  max-width: min(1100px, 100%);
+  gap: 10px;
+  max-width: min(1040px, 100%);
+  padding: 10px 10px 12px;
+  background: linear-gradient(180deg, rgba(255, 43, 214, 0.1), rgba(5, 6, 10, 0.9) 120px), rgba(5, 6, 10, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255, 43, 214, 0.45);
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
   scale: 0.96;
   transition: scale var(--t-slow) var(--ease-out);
 }
@@ -3035,16 +3050,18 @@ body.no-webgl #fallback-bg {
 }
 
 .lightbox__media {
+  width: auto;
   max-width: 100%;
-  max-height: calc(84vh - 70px);
+  max-height: 70vh;
   object-fit: contain;
-  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  background: #000;
 }
 
 .lightbox__caption {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 0 4px;
   font-size: 12px;
   color: var(--magenta);
 }
@@ -3058,9 +3075,12 @@ body.no-webgl #fallback-bg {
 }
 
 .lightbox__close {
+  --accent: var(--magenta);
+  --accent-rgb: 255, 43, 214;
+  --btn-fill: rgba(5, 6, 10, 0.75);
   position: absolute;
-  top: -48px;
-  right: 0;
+  top: 18px;
+  right: 18px;
 }
 
 /* ── settings overlay ─────────────────────────────────────────────────── */
@@ -3451,8 +3471,8 @@ body.crt-off #crt {
     rgba(9, 12, 19, 0.95);
 }
 
-:is(body.quality-low, body.no-webgl) .settings__backdrop {
-  background: rgba(3, 4, 8, 0.86);
+:is(body.quality-low, body.no-webgl) :is(.settings__backdrop, .lightbox) {
+  background: rgba(3, 4, 8, 0.88);
 }
 
 /* ── responsive ───────────────────────────────────────────────────────── */

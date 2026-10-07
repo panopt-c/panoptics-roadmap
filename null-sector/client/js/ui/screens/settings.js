@@ -110,7 +110,8 @@ export class SettingsOverlay {
 
     this.#updateStats();
     this.#statsTimer = setInterval(() => this.#updateStats(), STATS_MS);
-    this.#panel.querySelector(FOCUSABLE)?.focus({ preventScroll: true });
+    // Start on the first control (not the close button), so arrows adjust a value immediately.
+    this.#panel.querySelector(`.settings__body :is(${FOCUSABLE})`)?.focus({ preventScroll: true });
   }
 
   close() {

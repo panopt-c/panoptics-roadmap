@@ -16,7 +16,7 @@
  * `unlocked` (the next mission id from the victory result) so the hub can stage the unlock.
  * Params: `{mission}` per the contract, plus optional `result` / `unlocked` from victory.
  */
-import { h, decodeText, typewriter } from '../dom.js';
+import { h, decodeText, typewriter, nextFrame } from '../dom.js';
 import { settings } from '../../core/settings.js';
 
 const BAR_IN_MS = 900;
@@ -61,6 +61,8 @@ export class CutsceneScreen {
   #mediaUrls = new Set();
   #startedAt = 0;
   #frameShown = -1;
+  #eventSeq = 0; // bumps on every server:cutscene event for this mission
+  #statusSeq = 0; // bumps on every indicator change (guards deferred show/hide)
   #onClick = (e) => {
     if (e.button === 0) this.#finish();
   };
@@ -77,6 +79,7 @@ export class CutsceneScreen {
     this.#mediaUrls = new Set();
     this.#r = {};
     this.#frameShown = -1;
+    this.#eventSeq = 0;
     this.#mission = params.mission || {};
     const result = params.result;
     this.#unlocked =
@@ -181,6 +184,10 @@ export class CutsceneScreen {
     const r = this.#r;
     const cut = this.#mission.cutscene || { title: this.#mission.title || 'TRANSMISSION', narration: [] };
     const fast = reduced();
+    // Two frames: the bars must be painted collapsed once, or the ease-in has no start state.
+    await nextFrame();
+    await nextFrame();
+    if (!this.#alive) return;
     this.el.classList.add('is-rolling'); // bars ease in
     await this.#wait(fast ? 0 : TITLE_DELAY_MS);
     if (!this.#alive) return;
@@ -243,27 +250,27 @@ export class CutsceneScreen {
   async #requestMedia() {
     const id = this.#mission.id;
     if (!id) return;
-    this.#setStatus('rendering', 'still');
+    const seq = this.#eventSeq;
     let reply;
     try {
       reply = await this.#ctx.api.cutscene(id);
     } catch {
-      if (this.#alive) this.#setStatus(null);
-      return;
+      return; // no media: the world shader carries the scene
     }
     if (!this.#alive || !reply) return;
     if (reply.state === 'done' && reply.url) {
-      this.#setStatus(null);
       this.#showMedia(reply.url, reply.kind || this.#kindOf(reply.url));
-    } else if (reply.state === 'queued') {
+      if (seq === this.#eventSeq) this.#setStatus(null);
+    } else if (reply.state === 'queued' && seq === this.#eventSeq) {
+      // SSE and this reply travel on different connections: a progress event that arrived
+      // while the request was in flight is newer than this answer, so it wins.
       this.#setStatus('rendering', 'still');
-    } else {
-      this.#setStatus(null);
     }
   }
 
   #onEvent(data) {
     if (!this.#alive || !data || data.mission !== this.#mission.id) return;
+    this.#eventSeq++;
     switch (data.state) {
       case 'rendering':
         this.#setStatus('rendering', data.stage);
@@ -273,10 +280,12 @@ export class CutsceneScreen {
         // A finished still may be followed by a video pass; its own `rendering` event re-shows the indicator.
         this.#setStatus(null);
         break;
-      case 'failed':
+      case 'failed': {
         this.#setStatus('failed');
-        this.#later(() => this.#setStatus(null), 2200);
+        const seq = this.#eventSeq;
+        this.#later(() => seq === this.#eventSeq && this.#setStatus(null), 2200);
         break;
+      }
       default:
         this.#setStatus(null);
     }
@@ -289,13 +298,15 @@ export class CutsceneScreen {
     return entry?.kind === 'video' ? 'video' : 'image';
   }
 
+  /** Show ('rendering' | 'failed') or hide (null) the render indicator; the latest call wins. */
   #setStatus(state, stage) {
     const el = this.#r.status;
     if (!el) return;
+    const seq = ++this.#statusSeq;
     if (!state) {
       el.classList.remove('is-in');
       this.#later(() => {
-        if (!el.classList.contains('is-in')) el.hidden = true;
+        if (seq === this.#statusSeq) el.hidden = true;
       }, 400);
       return;
     }
@@ -303,7 +314,10 @@ export class CutsceneScreen {
     el.dataset.state = state;
     el.querySelector('.cs-status__label').textContent = state === 'failed' ? 'SIGNAL LOST — IN-ENGINE RECONSTRUCTION' : 'RENDERING MEMORY FRAGMENT';
     el.querySelector('.cs-status__stage').textContent = state === 'failed' ? '' : stage === 'video' ? 'MOTION PASS' : 'STILL';
-    requestAnimationFrame(() => el.classList.add('is-in'));
+    // Next frame, so the fade starts from the hidden state — unless a newer call superseded it.
+    requestAnimationFrame(() => {
+      if (seq === this.#statusSeq && this.#alive) el.classList.add('is-in');
+    });
   }
 
   #showMedia(url, kind) {

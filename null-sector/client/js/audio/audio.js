@@ -24,12 +24,12 @@
  *   sweeps; `SYNTHS` below). After unlock() the recipes are rendered once with
  *   OfflineAudioContexts — several seeded takes per cue for round-robin variation, rendered
  *   concurrently off the main thread — then sliced, DC-blocked, peak-normalized to the cue's
- *   mix level and trimmed. play() therefore only
- *   creates a buffer source, a gain and (when panned) a panner — the cost of three nodes,
- *   sample-accurate, with a consistent mix whatever the recipe does; rejected spam costs well
- *   under a microsecond. UI cues bake first (ready within a few frames); until a cue is baked,
- *   and for cues marked `live` (thunder, unique per strike), the same recipe runs directly on
- *   the live context. Without OfflineAudioContext everything runs live.
+ *   mix level and trimmed. play() therefore only creates a buffer source, a gain and (when
+ *   panned) a panner — the cost of three nodes, sample-accurate, with a consistent mix whatever
+ *   the recipe does; rejected spam costs well under a microsecond. UI cues bake first (ready
+ *   within a few frames); until a cue is baked, and for cues marked `live` (thunder, unique per
+ *   strike), the same recipe runs directly on the live context. Without OfflineAudioContext
+ *   everything runs live.
  *
  * Voices
  *   Per-cue voice limits (the oldest voice is stolen with a 6 ms fade), a minimum retrigger
@@ -47,9 +47,16 @@
  *
  * Lifecycle
  *   The AudioContext is created lazily inside the first user gesture (no autoplay warnings);
- *   unlock() is idempotent and also armed on the first pointer/key gesture. Hidden tabs fade
- *   out and suspend the context. Inject `{context}` (e.g. an OfflineAudioContext) for tests.
- *   No Web Audio → every method is a silent no-op. dispose() releases everything.
+ *   unlock() is idempotent and also armed on the first pointer/key gesture. A fresh
+ *   compressor over-attenuates its first ~150 ms, so output starts on a time-aligned bypass
+ *   and crossfades in (the unlocking click is never swallowed). Hidden tabs fade out and
+ *   suspend the context. No Web Audio → every method is a silent no-op.
+ *
+ * Contract (docs/ARCHITECTURE.md §4.4) plus backward-compatible extras:
+ *   play() also takes `delay` (s, on the audio clock) and `distance` (thunder), and returns
+ *   whether a voice started; constructor options `context` (inject e.g. an
+ *   OfflineAudioContext) and `ambient: false` (cues only); `whenBaked()`, `mood`, `context`,
+ *   `stats` (debug counters) and `dispose()`.
  */
 import { settings as defaultSettings } from '../core/settings.js';
 import { bus as defaultBus } from '../core/bus.js';
@@ -352,8 +359,6 @@ async function makeRain(ctx, rate, seconds, rng, alive) {
       b2 = 0.57 * b2 + w * 1.0526913;
       d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.035;
     }
-    await yieldTask();
-    if (!alive()) return null;
     const drops = Math.round(seconds * 760);
     for (let j = 0; j < drops; j++) {
       const pos = Math.floor(rng() * n);
@@ -375,7 +380,7 @@ async function makeRain(ctx, rate, seconds, rng, alive) {
         y1 = y;
         d[idx] += y;
       }
-      if ((j & 1023) === 1023) {
+      if ((j & 2047) === 2047) {
         await yieldTask();
         if (!alive()) return null;
       }
@@ -582,7 +587,7 @@ function brass(k, t, f, pan, amp, attack, hold, release, vibrato = 0) {
 
 const N = {
   A1: 55, E2: 82.41, A2: 110, Bb2: 116.54, C3: 130.81, E3: 164.81, G3: 196, A3: 220, B3: 246.94,
-  Cs4: 277.18, E4: 329.63, A4: 440, B4: 493.88, Cs5: 554.37, E5: 659.26, A5: 880, B5: 987.77,
+  Cs4: 277.18, E4: 329.63, A4: 440, Cs5: 554.37, E5: 659.26, A5: 880, B5: 987.77,
   Cs6: 1108.73, E6: 1318.51, F6: 1396.91, A6: 1760, B6: 1975.53, Cs7: 2217.46, E7: 2637.02,
 };
 const VICTORY_ARP = [N.A4, N.Cs5, N.E5, N.A5, N.B5, N.Cs6];
@@ -1605,44 +1610,39 @@ export class AudioEngine {
   // ── baking ────────────────────────────────────────────────────────────────
 
   /**
-   * Everything after the gesture, spread over tasks so no single one blocks a frame: the bed
-   * fades in, the reverb and noise textures are generated, then every cue is baked (UI first).
+   * Everything after the gesture, in a handful of short tasks (each a few ms of plain JS) so
+   * the boot transition never hitches, ordered by when the player will need it: the bed fades
+   * in, UI cues, the reverb, combat cues and loops, the rain texture, then the big moments.
    */
   async #bake() {
     const ctx = this.#ctx;
+    const rate = this.#rate;
     const alive = () => !this.#disposed;
     const seed = mulberry32(0xa11ce);
-    await yieldTask();
-    if (!alive()) return;
+    const OAC = globalThis.OfflineAudioContext;
+    const step = async () => {
+      await yieldTask();
+      return alive();
+    };
+    if (!(await step())) return;
     this.#applyMood(this.#mood, BOOT_TAU); // the world fades in
-    await yieldTask();
-    if (!alive()) return;
-    this.#res.noise.white = makeNoise(ctx, this.#rate, 'white', seed);
-    await yieldTask();
-    if (!alive()) return;
-    this.#res.noise.crackle = makeNoise(ctx, this.#rate, 'crackle', seed);
+    if (!(await step())) return;
+    this.#res.noise.white = makeNoise(ctx, rate, 'white', seed);
+    this.#res.noise.pink = makeNoise(ctx, rate, 'pink', seed);
+    if (OAC) await this.#bakeBatch(OAC, BAKE_BATCHES[0], false);
+    if (!(await step())) return;
+    this.#res.noise.brown = makeNoise(ctx, rate, 'brown', seed);
+    this.#res.noise.crackle = makeNoise(ctx, rate, 'crackle', seed);
     const impulse = await makeImpulse(ctx, REVERB_SECONDS, seed, alive);
     if (!impulse) return;
     this.#graph.convolver.buffer = impulse;
-    await yieldTask();
+    if (OAC) await this.#bakeBatch(OAC, BAKE_BATCHES[1], true);
     if (!alive()) return;
-    this.#res.noise.pink = makeNoise(ctx, this.#rate, 'pink', seed);
-    await yieldTask();
+    this.#loopBufs.rain = await makeRain(ctx, rate, 6, seed, alive);
     if (!alive()) return;
-    this.#res.noise.brown = makeNoise(ctx, this.#rate, 'brown', seed);
-    const OAC = globalThis.OfflineAudioContext;
-    for (let b = 0; b < BAKE_BATCHES.length; b++) {
-      if (OAC) await this.#bakeBatch(OAC, BAKE_BATCHES[b], b === 1);
-      if (!alive()) return;
-      if (b === 0) {
-        // The rain texture, once the first impressions are covered.
-        const rain = await makeRain(ctx, this.#rate, 6, seed, alive);
-        if (!alive()) return;
-        this.#loopBufs.rain = rain;
-        this.#startRain();
-      }
-    }
-    this.#resolveBaked();
+    this.#startRain();
+    if (OAC) await this.#bakeBatch(OAC, BAKE_BATCHES[2], false);
+    if (alive()) this.#resolveBaked();
   }
 
   /**
@@ -1670,9 +1670,9 @@ export class AudioEngine {
       }
     }
     const bufs = await Promise.all(groups.map((g) => this.#renderGroup(OAC, g)));
+    if (this.#disposed) return;
+    // Slicing a batch is a few ms of copying: one task, so the cues arrive together.
     for (let n = 0; n < groups.length; n++) {
-      await yieldTask(); // slicing is plain JS: one cue per task
-      if (this.#disposed) return;
       const g = groups[n];
       const buf = bufs[n];
       if (g.loop) {

@@ -17,8 +17,9 @@
  * exact same translate+rotate to the GL composite and particles must stay glued to DOM.
  *
  * DOM writes: `translate3d(x, y, 0) rotate(r)` on `root`, quantised (0.01 px, 0.001°) and
- * written only when the quantised value changes; cleared to '' at rest so #ui isn't a
- * permanent compositor layer. `state` is built from the same quantised values, so the GL
+ * written only when the quantised value changes; cleared to '' at rest — including shakes too
+ * faint to see (< 0.05 px), e.g. a distant lightning strike — so #ui isn't a needless
+ * compositor layer. `state` is built from the same quantised values, so the GL
  * composite and the DOM always agree exactly. Where CSS Typed OM exists, the transform is
  * a pre-built CSSTransformValue mutated in place — no string building, no CSS parsing,
  * zero allocations per frame; elsewhere it falls back to a style string (only while shaking).
@@ -44,6 +45,9 @@ const SEED_DRIFT_Y = 247.9;
 
 const PX_Q = 100; // quantisation: 0.01 px
 const DEG_Q = 1000; // quantisation: 0.001°
+const REST_PX = 5; // below 0.05 px…
+const REST_DEG = 2; // …and 0.002° the shake is invisible: treat as rest (no DOM write, no layer)
+const MAX_DT = 0.25; // matches Loop maxFrame: decay stays real-time even at low frame rates
 const RAD_TO_DEG = 180 / Math.PI;
 
 /** noise → [-1, 1] with gain and a smooth cubic knee (slope 0 at the limit, no plateau edge). */
@@ -118,7 +122,7 @@ export class Camera {
   frame(realDt) {
     let dt = +realDt;
     if (!(dt > 0)) dt = 0;
-    else if (dt > 0.1) dt = 0.1; // a hitch must not teleport the springs or skip the decay curve
+    else if (dt > MAX_DT) dt = MAX_DT; // a stall (debugger, tab switch) must not skip the decay curve
     this.#time += dt;
 
     let shakeSetting = +readSettings(this.#settings, 'shake', 1);
@@ -146,6 +150,9 @@ export class Camera {
       qy = Math.round(MAX_OFFSET * shake * shaped(p + SEED_Y) * PX_Q);
       // Roll on a slightly slower clock: rotation reads heavier than translation.
       qr = Math.round(MAX_ROLL * RAD_TO_DEG * shake * shaped(p * 0.8 + SEED_ROLL) * DEG_Q);
+      if (qx < REST_PX && qx > -REST_PX && qy < REST_PX && qy > -REST_PX && qr < REST_DEG && qr > -REST_DEG) {
+        qx = qy = qr = 0;
+      }
     }
 
     // ── parallax ──

@@ -174,12 +174,9 @@ export class HubScreen {
     const r = this.#r;
     this.#indexCampaign(state);
     const target = this.#byId.get(state.current);
-    if (unlocked && this.#byId.has(unlocked)) {
-      const status = this.#byId.get(unlocked).status;
-      if ((status === 'current' || status === 'encrypted') && !settings.get('reducedMotion')) this.#sealed = unlocked;
-    } else {
-      this.#sealed = null;
-    }
+    // Hold a freshly unlocked target back ("sealed") so it can be broken open once the map settles.
+    const status = this.#byId.get(unlocked)?.status;
+    this.#sealed = (status === 'current' || status === 'encrypted') && !settings.get('reducedMotion') ? unlocked : null;
 
     r.tip = this.#buildTip();
     this.el.append(
@@ -187,7 +184,7 @@ export class HubScreen {
       h(
         'div',
         { class: 'hub' },
-        h('div', { class: 'hub__left' }, this.#buildOperative(state), this.#buildDeploy(state)),
+        h('div', { class: 'hub__left' }, this.#buildOperative(), this.#buildDeploy()),
         this.#buildMap(state),
         this.#buildGallery(state),
       ),
@@ -272,7 +269,7 @@ export class HubScreen {
     r.feed.title = hf.online ? 'Cutscenes render with Higgsfield' : `In-engine cutscenes — ${hf.reason || 'no API key'}`;
   }
 
-  #buildOperative(state) {
+  #buildOperative() {
     const r = this.#r;
     r.portrait = h('div', { class: 'operative__portrait' });
     r.opId = h('span', { class: 'label mono operative__id' });

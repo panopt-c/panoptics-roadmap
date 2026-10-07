@@ -3,7 +3,7 @@
  *
  * Every revealable element starts hidden and animates in when the script adds `.is-in`;
  * stamps additionally get `.is-slam` (accelerate into the page, overshoot, settle — the
- * impact lands at 60 % = 170 ms, matching STAMP_IMPACT_MS in victory.js). `.is-instant` on
+ * impact lands at 58 % of 300 ms ≈ 170 ms, matching STAMP_IMPACT_MS in victory.js). `.is-instant` on
  * the root collapses every entrance when the player skips. Colours follow the bible:
  * acid = success, blood = the deleted enemy, amber = the speed stamp, magenta = narrative
  * (rank-up, transmission).

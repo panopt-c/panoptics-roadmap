@@ -71,12 +71,9 @@ const EMIT_TO = { color: CYAN, count: 0, tx: 0, ty: 0 };
 const POINTS = { color: BLOOD, angle: RELEASE_ANGLE, hold: 0.12, sweep: 0.6 };
 
 export class FeedbackDirector {
+  #ctx;
   #bus;
   #settings;
-  #camera;
-  #loop;
-  #renderer;
-  #audio;
 
   #offs = [];
   #timers = new Set();
@@ -88,14 +85,14 @@ export class FeedbackDirector {
   #densityFor = null; // the Particles instance last given a density…
   #densityValue = -1; // …and the value it got
 
-  /** @param {object} ctx  { bus, settings, camera, loop, renderer, audio } — the app ctx. */
+  /**
+   * @param {object} ctx  the app ctx: { bus, settings, camera, loop, renderer, audio }.
+   * Collaborators are read from ctx at call time, so a subsystem swapped in later is followed.
+   */
   constructor(ctx = {}) {
+    this.#ctx = ctx;
     this.#bus = ctx.bus || defaultBus;
     this.#settings = ctx.settings || defaultSettings;
-    this.#camera = ctx.camera || null;
-    this.#loop = ctx.loop || null;
-    this.#renderer = ctx.renderer || null;
-    this.#audio = ctx.audio || null;
 
     const on = (type, fn) => this.#offs.push(this.#bus.on(type, fn));
     on('hack:charge', (e) => this.#onCharge(e));
@@ -143,7 +140,7 @@ export class FeedbackDirector {
     if (!e) return;
     if (e.passed) {
       this.#trauma(0.22);
-      this.#loop?.hitStop?.(45);
+      this.#ctx.loop?.hitStop?.(45);
       this.#emit('spark', e.x, e.y, ACID, 24);
       this.#emit('stream', e.x, e.y, CYAN, 28, e);
       this.#emit('shatter', e.tx, e.ty, BLOOD, 20);
@@ -169,7 +166,7 @@ export class FeedbackDirector {
   #onVictory(e) {
     if (!e) return;
     this.#trauma(0.9);
-    this.#loop?.hitStop?.(140);
+    this.#ctx.loop?.hitStop?.(140);
     this.#emit('explosion', e.x, e.y, BLOOD, 220);
     if (e.points && e.points.length >= 2) this.#disintegrate(e.points);
     this.#play('death');
@@ -220,12 +217,12 @@ export class FeedbackDirector {
       this.#alarmTimer = 0;
     }
     this.#mood = name;
-    const r = this.#renderer;
+    const r = this.#ctx.renderer;
     if (r && typeof r.setMood === 'function') {
       if (seconds === undefined) r.setMood(name);
       else r.setMood(name, seconds);
     }
-    this.#audio?.setMood?.(name);
+    this.#ctx.audio?.setMood?.(name);
     if (name === 'alarm') {
       this.#alarmTimer = this.#later(() => {
         this.#alarmTimer = 0;
@@ -237,33 +234,33 @@ export class FeedbackDirector {
   // ── primitives ────────────────────────────────────────────────────────
 
   #trauma(amount) {
-    this.#camera?.addTrauma?.(amount);
+    this.#ctx.camera?.addTrauma?.(amount);
   }
 
   #play(cue, pitch = 1, gain = 1) {
-    const a = this.#audio;
+    const a = this.#ctx.audio;
     if (a && typeof a.play === 'function') a.play(cue, { pitch, gain });
   }
 
   #flash(rgb, amount) {
-    const r = this.#renderer;
+    const r = this.#ctx.renderer;
     if (r && typeof r.flash === 'function') r.flash(rgb, this.#settings.get('reducedMotion') ? amount * 0.5 : amount);
   }
 
   /** The live particle system (the renderer swaps it on context restore), density synced. */
   #particles() {
-    const p = this.#renderer?.particles;
+    const p = this.#ctx.renderer?.particles;
     if (!p || typeof p.emit !== 'function') return null;
     this.#syncDensity(p);
     return p;
   }
 
-  #syncDensity(p = this.#renderer?.particles) {
+  #syncDensity(p = this.#ctx.renderer?.particles) {
     if (!p || typeof p.setDensity !== 'function') return;
     const q = this.#settings.get('quality');
     let d = QUALITY_DENSITY[q] ?? 1;
     if (q === 'auto') {
-      const scale = this.#renderer?.stats?.scale;
+      const scale = this.#ctx.renderer?.stats?.scale;
       if (typeof scale === 'number' && scale > 0 && scale < 1) d *= 0.45 + 0.55 * scale;
     }
     d = Math.round(d * 20) / 20; // quantised: no churn from tiny scale changes
