@@ -42,24 +42,37 @@ def mission_path(mission: Mission, missions_dir: Path | None = None) -> Path:
     return (missions_dir or MISSIONS_DIR) / mission.filename
 
 
-def ensure_mission_file(mission: Mission, reset: bool = False, missions_dir: Path | None = None) -> Path:
-    """Drop the starter file into missions/ — never overwriting your work unless asked."""
-    path = mission_path(mission, missions_dir)
+def ensure_mission_file(mission: Mission, reset: bool = False, missions_dir: Path | None = None,
+                        path: Path | None = None) -> Path:
+    """Drop the starter file (and any data assets) into missions/ — never overwriting your work unless asked."""
+    path = path or mission_path(mission, missions_dir)
     if reset or not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(mission.starter.lstrip("\n"), encoding="utf-8")
+    write_assets(mission, path.parent)
     return path
 
 
-def hack(mission: Mission, missions_dir: Path | None = None) -> HackReport:
-    path = ensure_mission_file(mission, missions_dir=missions_dir)
+def write_assets(mission: Mission, folder: Path) -> None:
+    """Data files a level reads (CSV, HTML, JSON, a mock API module). Missing ones are restored."""
+    for name, text in (mission.assets or {}).items():
+        target = (folder / name).resolve()
+        if folder.resolve() not in target.parents:
+            raise ValueError(f"asset {name!r} escapes the missions folder")
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="utf-8")
+
+
+def hack(mission: Mission, missions_dir: Path | None = None, path: Path | None = None) -> HackReport:
+    path = ensure_mission_file(mission, missions_dir=missions_dir, path=path)
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "report.json"
         env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
         try:
             # cwd is the code root (where `engine` and `levels` live), wherever the player's files are.
             proc = subprocess.run(
-                [sys.executable, "-m", "engine.harness", mission.slug, str(path), str(out)],
+                [sys.executable, "-m", "engine.harness", mission.grader_key or mission.slug, str(path), str(out)],
                 cwd=GAME_DIR, env=env, stdin=subprocess.DEVNULL,
                 capture_output=True, timeout=mission.timeout,
             )

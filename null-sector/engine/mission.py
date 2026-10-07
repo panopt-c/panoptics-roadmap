@@ -76,6 +76,13 @@ class Mission:
     timeout: float = 10.0      # seconds before the code is treated as an infinite loop
     run_as_main: bool = True   # whether `if __name__ == "__main__":` blocks run
     checks: list[Check] = field(default_factory=list)
+    # v2 (docs/GAME_DESIGN.md §2.2) — all optional, so older levels keep working
+    tier: int = 1              # 1 beginner … 5 expert
+    concepts: tuple[str, ...] = ()   # mastery tags (GAME_DESIGN §3.3)
+    boss: bool = False
+    assets: dict[str, str] = field(default_factory=dict)      # filename -> text, written beside the mission file
+    dialogue: dict[str, list] = field(default_factory=dict)   # GAME_DESIGN §5.2
+    grader_key: str = ""       # what the harness loads; defaults to slug (drills use "drill:<id>:<seed>")
 
     def check(self, name: str):
         def register(fn):

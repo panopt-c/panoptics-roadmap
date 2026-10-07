@@ -40,8 +40,17 @@ def json_safe(value):
         return repr(value)
 
 
+def load_for_grading(key: str):
+    """A campaign slug, or `drill:<drill_id>:<seed>` for a procedural drill instance."""
+    if key.startswith("drill:"):
+        from engine.drills import instance
+        _, drill_id, seed = key.split(":", 2)
+        return instance(drill_id, int(seed))
+    return load_mission(key)
+
+
 def grade(slug: str, player_file: Path) -> dict:
-    mission = load_mission(slug)
+    mission = load_for_grading(slug)
     report = {"status": "ok", "stdout": "", "error": None, "checks": [], "exports": {}}
 
     source = player_file.read_text(encoding="utf-8")
