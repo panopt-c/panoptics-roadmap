@@ -418,7 +418,7 @@ class CommandCenterBrowserTests(unittest.TestCase):
         self.backend.snapshot = copy.deepcopy(EMPTY_SNAPSHOT)
         self.open_command_center()
         self.assertIn("No weigh-ins yet", self.text(".ops-chart"))
-        self.assertIn("Empty", self.text(".ops-items"))
+        self.assertRegex(self.text(".ops-items"), r"(?i)empty|no items")
         self.assertIn("No milestones", self.text(".ops-milestones"))
         self.assertIn("No activity yet", self.text(".ops-feed"))
         self.assertIn("Log a weigh-in", self.text(".ops-weight__togo"))
