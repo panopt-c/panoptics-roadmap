@@ -1,0 +1,9 @@
+# NULL//SECTOR — install with:  pip install -r requirements.txt
+
+# Terminal UI: panels, live HP bars, animations, syntax-highlighted lessons
+rich>=13.7
+
+# Official Higgsfield SDK — cinematic cutscenes (optional: the game runs without it)
+higgsfield-client>=0.2
+
+# Later sectors will add: requests, beautifulsoup4 (Data Tier), numpy (Hero Tier)

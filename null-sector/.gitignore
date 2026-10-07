@@ -1,0 +1,7 @@
+# Your API keys live here — never commit it (this repo is public)
+config.json
+# Personal progress + generated media
+save.json
+cutscenes/*
+!cutscenes/.gitkeep
+__pycache__/

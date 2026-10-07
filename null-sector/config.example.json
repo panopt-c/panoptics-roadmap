@@ -1,0 +1,22 @@
+{
+  "higgsfield": {
+    "api_key": "PASTE_YOUR_HIGGSFIELD_API_KEY_HERE",
+    "api_secret": "PASTE_YOUR_HIGGSFIELD_API_SECRET_HERE",
+    "image_model": "higgsfield-ai/soul/standard",
+    "image_arguments": { "aspect_ratio": "16:9" },
+    "reference_argument": "image_url",
+    "video_enabled": false,
+    "video_model": "higgsfield-ai/dop/standard",
+    "video_image_argument": "image_url",
+    "video_arguments": {},
+    "auto_open": true
+  },
+  "avatar": {
+    "description": "a 23-year-old rogue engineer in a battered black tech-jacket with glowing cyan seams, a cracked neural-interface visor over one eye, fingerless gloves, rain-soaked hair"
+  },
+  "ui": {
+    "animations": true,
+    "typing_speed": 0.012
+  },
+  "editor": ""
+}
