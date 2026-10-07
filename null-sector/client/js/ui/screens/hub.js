@@ -24,7 +24,8 @@
  * gallery re-renders only when its contents change). Cutscene renders in progress
  * (`server:cutscene`) show as "decoding" cards in the gallery.
  *
- * Keys: Enter deploys the current target; arrows walk the map; Esc closes the fragment
+ * Keys: Enter deploys the current target; O opens the command center (study & fitness);
+ * arrows walk the map; Esc closes the fragment
  * viewer (otherwise it falls through to the settings menu).
  */
 import { h, countUp } from '../dom.js';
@@ -130,6 +131,8 @@ export class HubScreen {
     const unlocked = typeof params.unlocked === 'string' ? params.unlocked : params.unlocked?.id;
     this.#build(state, unlocked);
     this.#offs.push(ctx.bus.on('state:changed', (s) => this.#update(s)));
+    this.#offs.push(ctx.bus.on('server:productivity', (snap) => this.#renderOps(snap)));
+    this.#loadOps();
   }
 
   async exit() {
@@ -159,6 +162,11 @@ export class HubScreen {
       this.#deployCurrent();
       return true;
     }
+    if ((e.key === 'o' || e.key === 'O') && !e.repeat) {
+      e.preventDefault();
+      this.#openOps();
+      return true;
+    }
     const step = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [1, 0], ArrowDown: [-1, 0] }[e.key];
     if (step) {
       e.preventDefault();
@@ -184,7 +192,7 @@ export class HubScreen {
       h(
         'div',
         { class: 'hub' },
-        h('div', { class: 'hub__left' }, this.#buildOperative(), this.#buildDeploy()),
+        h('div', { class: 'hub__left' }, this.#buildOperative(), this.#buildDeploy(), this.#buildOps()),
         this.#buildMap(state),
         this.#buildGallery(state),
       ),
@@ -355,6 +363,65 @@ export class HubScreen {
       r.strip.replaceChildren(...this.#levels.map((l) => h('i', { style: `--c: ${l.color}; --c-rgb: ${l.rgb}; --n: ${l.index}` })));
     }
     for (const l of this.#levels) r.strip.children[l.index].className = `breach-strip__cell is-${l.status}`;
+  }
+
+  // ── command center entry (productivity) ───────────────────────────────
+
+  #buildOps() {
+    const r = this.#r;
+    r.opsTitle = h('span', { class: 'hub-ops__title' }, 'Daily ops');
+    r.opsSub = h('span', { class: 'hub-ops__sub' }, 'Syncing daily ops…');
+    r.opsMeter = h('span', { class: 'meter meter--ticks hub-ops__meter', 'aria-hidden': 'true' }, h('span', { class: 'meter__fill' }));
+    r.ops = h(
+      'button',
+      { class: 'btn btn--ghost hub-ops rise', style: '--i: 3', type: 'button', 'aria-keyshortcuts': 'O', onclick: () => this.#openOps() },
+      h('span', { class: 'hub-ops__text' }, h('span', { class: 'hub-ops__kicker' }, 'Command center ▸'), r.opsTitle, r.opsSub),
+      h('span', { class: 'kbd' }, 'O'),
+      r.opsMeter,
+    );
+    if (this.#ctx.productivity) this.#renderOps(this.#ctx.productivity);
+    return r.ops;
+  }
+
+  #loadOps() {
+    const ctx = this.#ctx;
+    ctx.api
+      .productivity()
+      .then((snap) => {
+        ctx.productivity = snap;
+        if (this.#alive) this.#renderOps(snap);
+      })
+      .catch(() => {
+        if (!this.#alive || ctx.productivity || !this.#r.ops) return;
+        this.#r.ops.classList.add('is-offline');
+        this.#r.opsSub.textContent = 'Offline — open to retry';
+      });
+  }
+
+  #renderOps(snap) {
+    const r = this.#r;
+    if (!r.ops || !snap || typeof snap !== 'object') return;
+    const study = snap.study || {};
+    const goal = Number(study.goal_minutes) || 360;
+    const today = Math.max(0, Number(study.today_minutes) || 0);
+    const progress = Number.isFinite(Number(study.progress)) ? clamp(Number(study.progress), 0, 1) : clamp(today / goal, 0, 1);
+    const fit = snap.fitness || {};
+    const parts = [`Training ${Math.max(0, Number(fit.today_workout_minutes) || 0)} min`];
+    if (fit.latest_weight_lbs !== null && fit.latest_weight_lbs !== undefined && Number.isFinite(Number(fit.latest_weight_lbs))) {
+      parts.push(`${Number(fit.latest_weight_lbs).toFixed(1)} → ${Number(fit.target_weight_lbs) || 170} lb`);
+    }
+    r.ops.classList.remove('is-offline');
+    r.ops.classList.toggle('is-complete', progress >= 1);
+    r.opsTitle.textContent = `Study ${today} / ${goal} min`;
+    r.opsSub.textContent = parts.join(' · ');
+    r.opsMeter.style.setProperty('--value', String(progress));
+    r.ops.setAttribute('aria-label', `Command center: study ${today} of ${goal} minutes today. ${parts.join(', ')}. Shortcut O.`);
+  }
+
+  #openOps() {
+    if (this.#leaving) return;
+    this.#ctx.bus.emit('ui:click', {});
+    this.#ctx.screens.go('productivity');
   }
 
   #buildDeploy() {
