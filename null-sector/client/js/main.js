@@ -94,6 +94,7 @@ const ctx = {
   settings,
   screens: null,
   state: null,
+  productivity: null, // latest productivity snapshot (GET /api/productivity or SSE `productivity`)
   refreshState,
   toast,
   openSettings: () => overlay?.open(),
@@ -132,7 +133,7 @@ const firstState = refreshState().catch((err) => {
 });
 
 // ── 2. subsystems ──────────────────────────────────────────────────────────────────────
-const [Loop, Camera, Renderer, AudioEngine, FeedbackDirector, BootScreen, HubScreen, SettingsOverlay, MissionScreen, VictoryScreen, CutsceneScreen] =
+const [Loop, Camera, Renderer, AudioEngine, FeedbackDirector, BootScreen, HubScreen, SettingsOverlay, MissionScreen, VictoryScreen, CutsceneScreen, ProductivityScreen] =
   await Promise.all([
     load('./core/loop.js', 'Loop'),
     load('./fx/camera.js', 'Camera'),
@@ -145,6 +146,7 @@ const [Loop, Camera, Renderer, AudioEngine, FeedbackDirector, BootScreen, HubScr
     load('./ui/screens/mission.js', 'MissionScreen'),
     load('./ui/screens/victory.js', 'VictoryScreen'),
     load('./ui/screens/cutscene.js', 'CutsceneScreen'),
+    load('./ui/screens/productivity.js', 'ProductivityScreen'),
   ]);
 
 const uiRoot = $('#ui');
@@ -388,6 +390,7 @@ const screens = new ScreenManager(ctx, $('#screens'), {
   mission: MissionScreen,
   victory: VictoryScreen,
   cutscene: CutsceneScreen,
+  productivity: ProductivityScreen,
 });
 ctx.screens = screens;
 
@@ -465,7 +468,7 @@ const banner = (() => {
   const action = h('button', { class: 'btn btn--ghost link-banner__action', type: 'button', hidden: true, onclick: () => location.reload() }, 'RELOAD');
   const el = h(
     'div',
-    { class: 'link-banner', role: 'alert', 'aria-live': 'assertive' },
+    { class: 'link-banner', role: 'alert', 'aria-live': 'assertive', 'aria-hidden': 'true' },
     h('span', { class: 'link-banner__pulse', 'aria-hidden': 'true' }),
     h('div', { class: 'link-banner__text' }, title, detail),
     action,
@@ -482,11 +485,13 @@ const banner = (() => {
       action.hidden = !reload;
       el.classList.toggle('is-fatal', reload);
       if (!shown) el.classList.add('is-shown');
+      el.removeAttribute('aria-hidden');
       shown = true;
     },
     hide() {
       shown = false;
       el.classList.remove('is-shown');
+      el.setAttribute('aria-hidden', 'true');
     },
   };
 })();
@@ -498,6 +503,7 @@ let probing = false;
 
 function onServerEvent(name, data) {
   if (name === 'state' && data && typeof data === 'object' && data.profile) ctx.state = data;
+  if (name === 'productivity' && data && typeof data === 'object') ctx.productivity = data;
   bus.emit(`server:${name}`, data);
   if (name === 'state' && data?.profile) bus.emit('state:changed', data);
 }

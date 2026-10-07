@@ -12,7 +12,7 @@
  *
  * Events
  *  `events(onEvent, {onStatus})` opens `/api/events?token=` (EventSource cannot send headers)
- *  and dispatches the named server events (`hello`, `file`, `cutscene`, `state`) as
+ *  and dispatches the named server events (`hello`, `file`, `cutscene`, `state`, `productivity`) as
  *  `onEvent(name, data)`. The browser's built-in reconnect is not used: a 401/403 makes an
  *  EventSource give up for good, so on any error we close it and reconnect ourselves with
  *  jittered exponential backoff (0.6 s → 15 s), immediately when the OS reports the network
@@ -25,7 +25,7 @@ const BACKOFF_BASE_MS = 600;
 const BACKOFF_MAX_MS = 15_000;
 
 /** Named SSE events the server sends (§3.4). */
-export const SERVER_EVENTS = Object.freeze(['hello', 'file', 'cutscene', 'state']);
+export const SERVER_EVENTS = Object.freeze(['hello', 'file', 'cutscene', 'state', 'productivity']);
 
 export class ApiError extends Error {
   /**
@@ -85,6 +85,35 @@ export class Api {
 
   cutscene(id) {
     return this.#request('POST', `/api/missions/${segment(id)}/cutscene`);
+  }
+
+  // ── productivity command center (study, fitness, inventory) ──────────────
+  // Log calls carry a caller-supplied `request_id`: resending the same id with the same
+  // payload is safe (the server records it once), so callers may retry uncertain failures.
+
+  /** GET /api/productivity → the full productivity snapshot. */
+  productivity() {
+    return this.#request('GET', '/api/productivity');
+  }
+
+  /** {course, minutes, topic?, on_date?, request_id} → {activity, snapshot} */
+  logStudy(entry) {
+    return this.#request('POST', '/api/productivity/study', { body: entry });
+  }
+
+  /** {activity, minutes, sets?, reps?, load_lbs?, distance_miles?, note?, on_date?, request_id} → {activity, snapshot} */
+  logWorkout(entry) {
+    return this.#request('POST', '/api/productivity/workout', { body: entry });
+  }
+
+  /** {weight_lbs, on_date?, request_id} → {activity, snapshot} */
+  logWeight(entry) {
+    return this.#request('POST', '/api/productivity/weight', { body: entry });
+  }
+
+  /** GET /api/productivity/rewards → cinematic reward jobs (read-only; never triggers a render). */
+  rewards() {
+    return this.#request('GET', '/api/productivity/rewards');
   }
 
   /**

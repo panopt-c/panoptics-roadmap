@@ -1135,17 +1135,24 @@ body.no-webgl #fallback-bg {
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.5);
   clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
   opacity: 0;
+  visibility: hidden; /* out of the accessibility tree and innerText while hidden, not just transparent */
   transform: translate3d(-50%, -130%, 0);
   pointer-events: none;
   transition:
     transform var(--t-slow) var(--ease-back),
-    opacity var(--t-med) var(--ease-out);
+    opacity var(--t-med) var(--ease-out),
+    visibility 0s linear var(--t-slow);
 }
 
 .link-banner.is-shown {
   opacity: 1;
+  visibility: visible;
   transform: translate3d(-50%, 0, 0);
   pointer-events: auto;
+  transition:
+    transform var(--t-slow) var(--ease-back),
+    opacity var(--t-med) var(--ease-out),
+    visibility 0s linear 0s;
 }
 
 .link-banner.is-fatal {
