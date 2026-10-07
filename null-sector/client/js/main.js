@@ -95,6 +95,7 @@ const ctx = {
   screens: null,
   state: null,
   productivity: null, // latest productivity snapshot (GET /api/productivity or SSE `productivity`)
+  dialogue: { play: () => Promise.resolve(), active: false }, // DialogueOverlay (GAME_DESIGN §8)
   refreshState,
   toast,
   openSettings: () => overlay?.open(),
@@ -133,7 +134,8 @@ const firstState = refreshState().catch((err) => {
 });
 
 // ── 2. subsystems ──────────────────────────────────────────────────────────────────────
-const [Loop, Camera, Renderer, AudioEngine, FeedbackDirector, BootScreen, HubScreen, SettingsOverlay, MissionScreen, VictoryScreen, CutsceneScreen, ProductivityScreen] =
+const [Loop, Camera, Renderer, AudioEngine, FeedbackDirector, BootScreen, HubScreen, SettingsOverlay, MissionScreen, VictoryScreen, CutsceneScreen, ProductivityScreen,
+  MonasteryScreen, ArenaScreen, TrainingScreen, RunScreen, RunResultScreen, ShopScreen, ContactsScreen, DialogueOverlay, ThemeManager] =
   await Promise.all([
     load('./core/loop.js', 'Loop'),
     load('./fx/camera.js', 'Camera'),
@@ -147,6 +149,15 @@ const [Loop, Camera, Renderer, AudioEngine, FeedbackDirector, BootScreen, HubScr
     load('./ui/screens/victory.js', 'VictoryScreen'),
     load('./ui/screens/cutscene.js', 'CutsceneScreen'),
     load('./ui/screens/productivity.js', 'ProductivityScreen'),
+    load('./ui/screens/monastery.js', 'MonasteryScreen'),
+    load('./ui/screens/arena.js', 'ArenaScreen'),
+    load('./ui/screens/training.js', 'TrainingScreen'),
+    load('./ui/screens/run.js', 'RunScreen'),
+    load('./ui/screens/run_result.js', 'RunResultScreen'),
+    load('./ui/screens/shop.js', 'ShopScreen'),
+    load('./ui/screens/contacts.js', 'ContactsScreen'),
+    load('./ui/dialogue.js', 'DialogueOverlay'),
+    load('./ui/theme.js', 'ThemeManager'),
   ]);
 
 const uiRoot = $('#ui');
@@ -391,10 +402,19 @@ const screens = new ScreenManager(ctx, $('#screens'), {
   victory: VictoryScreen,
   cutscene: CutsceneScreen,
   productivity: ProductivityScreen,
+  monastery: MonasteryScreen,
+  arena: ArenaScreen,
+  training: TrainingScreen,
+  run: RunScreen,
+  'run-result': RunResultScreen,
+  shop: ShopScreen,
+  contacts: ContactsScreen,
 });
 ctx.screens = screens;
 
 const overlay = construct(SettingsOverlay, [ctx, $('#settings-root')], null, 'SettingsOverlay');
+ctx.dialogue = construct(DialogueOverlay, [ctx, $('#dialogue-root')], ctx.dialogue, 'DialogueOverlay');
+construct(ThemeManager, [ctx], null, 'ThemeManager');
 
 // ── toasts ─────────────────────────────────────────────────────────────────────────────
 const TOAST_META = {

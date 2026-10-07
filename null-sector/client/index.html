@@ -32,6 +32,13 @@
   <link rel="stylesheet" href="/css/victory.css">
   <link rel="stylesheet" href="/css/cutscene.css">
   <link rel="stylesheet" href="/css/productivity.css">
+  <link rel="stylesheet" href="/css/monastery.css">
+  <link rel="stylesheet" href="/css/arena.css">
+  <link rel="stylesheet" href="/css/training.css">
+  <link rel="stylesheet" href="/css/run.css">
+  <link rel="stylesheet" href="/css/shop.css">
+  <link rel="stylesheet" href="/css/contacts.css">
+  <link rel="stylesheet" href="/css/dialogue.css">
 
   <style>
     /* Pre-boot loader: inline so it paints on the very first frame, before any stylesheet. */
@@ -81,6 +88,7 @@
   </div>
   <div id="crt" aria-hidden="true"></div>
   <div id="toasts" aria-live="polite"></div>
+  <div id="dialogue-root"></div>
   <div id="settings-root"></div>
 
   <noscript>
@@ -97,6 +105,7 @@
       }
     }, 9000);
   </script>
+  <script type="importmap">{"imports": {"three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/"}}</script>
   <script type="module" src="/js/main.js"></script>
 </body>
 </html>

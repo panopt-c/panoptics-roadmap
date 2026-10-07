@@ -3606,3 +3606,21 @@ body.crt-off #crt {
     margin-top: 4vh;
   }
 }
+
+/* ── placeholder screens (v2 modules not built yet) ───────────────────── */
+.placeholder {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  padding: var(--gutter);
+}
+
+.placeholder__panel {
+  width: min(460px, 100%);
+}
+
+.placeholder__msg {
+  margin-bottom: 18px;
+  font: 500 14px/1.55 var(--font-display);
+  color: var(--steel);
+}
