@@ -1,7 +1,12 @@
 # NULL//SECTOR — install with:  pip install -r requirements.txt
+# The browser client is served by Python's standard library: no web framework, no Node, no build step.
 
 # Terminal UI: panels, live HP bars, animations, syntax-highlighted lessons
 rich>=13.7
+
+# Mission briefings -> HTML for the browser client (both ship with rich, but the game imports them directly)
+markdown-it-py>=2.2
+pygments>=2.13
 
 # Official Higgsfield SDK — cinematic cutscenes (optional: the game runs without it)
 higgsfield-client>=0.2

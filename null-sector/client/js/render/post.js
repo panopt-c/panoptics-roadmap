@@ -21,6 +21,11 @@
  *   → scanlines on device-pixel rows → exact sRGB encode → luminance-weighted film grain
  *   → TPDF dither (no banding in the dark gradients this game lives in).
  *
+ * Flash is treated as light, not paint: a tinted lift calibrated for a scene that lives near
+ * black (a per-hit 0.12 is a pulse, a 0.85 victory a punch) plus an exposure push that makes
+ * the existing neon flare. `focus` deepens the vignette here; the darken / desaturate / blur
+ * of the world itself happens in the Renderer's world→HDR blit, before particles are added.
+ *
  * Everything per-frame is uniforms on cached locations; no allocations, no GL queries.
  * The public knobs below are for art direction and can be tweaked live from the console.
  */
@@ -246,6 +251,9 @@ export class Post {
   streakStrength = 0.09;
   streakThreshold = 1.4;
   streakTint = [0.35, 0.6, 1.0];
+  /** Flash response: additive lift per unit amount (linear), and exposure gain per unit amount. */
+  flashLift = 0.21;
+  flashPunch = 0.9;
   /** Peak CRT looks at settings.crt = 1. */
   vignette = 0.42;
   scanlines = 0.045;
@@ -262,7 +270,6 @@ export class Post {
   #up;
   #streak;
   #composite;
-  #u = {};
   #w = 1;
   #h = 1;
   #seed = 1;
@@ -321,12 +328,15 @@ export class Post {
    * @param {WebGL2RenderingContext} gl
    * @param {{fbo, tex, w, h}} hdrTarget  linear HDR scene
    * @param {object} frame  renderer frame state (ARCHITECTURE §4.4)
-   * @param {{crt?: number, bloom?: boolean, reducedMotion?: boolean}} settings
+   * @param {{crt?: number, bloom?: boolean, reducedMotion?: boolean}|{get(k: string): any}} settings
+   *   a plain snapshot (what the Renderer passes, allocation-free) or the settings store itself
    */
   render(gl, hdrTarget, frame, settings) {
-    const crt = settings && typeof settings.crt === 'number' ? Math.min(Math.max(settings.crt, 0), 1) : 1;
-    const bloomOn = !settings || settings.bloom !== false;
-    const reduced = !!(settings && settings.reducedMotion);
+    const store = settings && typeof settings.get === 'function';
+    const crtValue = store ? settings.get('crt') : settings && settings.crt;
+    const crt = typeof crtValue === 'number' ? Math.min(Math.max(crtValue, 0), 1) : 1;
+    const bloomOn = !settings || (store ? settings.get('bloom') : settings.bloom) !== false;
+    const reduced = !!(settings && (store ? settings.get('reducedMotion') : settings.reducedMotion));
 
     if (hdrTarget.w !== this.#w || hdrTarget.h !== this.#h) this.resize(hdrTarget.w, hdrTarget.h);
 
@@ -373,11 +383,14 @@ export class Post {
     const tint = this.streakTint;
     gl.uniform3f(u.uStreakTint, tint[0], tint[1], tint[2]);
 
-    // Flash: additive HDR light with a whiter core at high amounts (reads as a bright burst).
+    // Flash: light, not paint. A tinted lift sized for a scene that lives near black (the
+    // dominant channel lands at ~0.13 sRGB for a 0.12 hit, ~0.55 for a 0.85 victory), an
+    // exposure punch that makes the existing neon flare, and a whiter core only for big hits.
     const fa = flash.amount;
     const fc = flash.color;
-    const core = fa * fa * 0.35;
-    gl.uniform3f(u.uFlash, fc[0] * fa * 1.6 + core, fc[1] * fa * 1.6 + core, fc[2] * fa * 1.6 + core);
+    const lift = fa * this.flashLift;
+    const core = fa * fa * fa * 0.1;
+    gl.uniform3f(u.uFlash, fc[0] * lift + core, fc[1] * lift + core, fc[2] * lift + core);
 
     const vig = Math.min(0.9, this.vignette * (0.55 + 0.45 * crt) + 0.12 * frame.focus + 0.1 * mood.cinematic);
     gl.uniform1f(u.uVignetteK, 1 / Math.sqrt(1 - vig) - 1);
@@ -387,7 +400,7 @@ export class Post {
     const mc = mood.color;
     gl.uniform3f(u.uEdgeGlow, mc[0] * pulse, mc[1] * pulse, mc[2] * pulse);
 
-    gl.uniform1f(u.uExposure, this.exposure * (1 + 0.1 * (frame.lightning || 0)));
+    gl.uniform1f(u.uExposure, this.exposure * (1 + 0.1 * (frame.lightning || 0)) * (1 + this.flashPunch * fa));
 
     const dpr = frame.dpr > 0 ? frame.dpr : 1;
     gl.uniform2f(u.uScan, this.scanlines * crt, Math.max(2, Math.round(2 * dpr)));

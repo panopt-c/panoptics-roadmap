@@ -12,21 +12,34 @@ pip install -r requirements.txt
 python game.py
 ```
 
-The fastest way to play is with two windows side by side:
+This starts a small local server and opens the game in your browser at `http://127.0.0.1:7777`
+(if that port is busy, the next free one is used, and the terminal shows the link). Press
+`Ctrl+C` in the terminal to quit. Your progress is saved automatically.
 
-```bash
-python game.py watch     # every time you save your mission file, the game attacks
-```
+| Key | What it does |
+|---|---|
+| `Ctrl+Enter` (`⌘+Enter` on macOS) | **Hack**: run your code against the enemy's firewall |
+| `Ctrl+S` (`⌘+S`) | Save your mission file |
+| `Esc` | Settings: volume, screen shake, CRT effects, graphics quality |
 
-Open `missions/level_01_cold_boot.py` in your editor in the other window, write code, and save.
+Write code in the in-game editor (it also saves as you type), or open `missions/level_01_cold_boot.py`
+in your own editor: every save shows up in the browser instantly. If the in-game editor has unsaved
+changes at that moment, the game asks which version to keep.
+
+### Commands
 
 | Command | What it does |
 |---|---|
-| `python game.py` | Main menu: HUD, sector map, briefings |
-| `python game.py watch` | Auto-attack each time you save |
-| `python game.py hack` | Attack once |
+| `python game.py` | Play in the browser (default) |
+| `python game.py --port 8000` | Use another port |
+| `python game.py --no-browser` | Start the server without opening a tab |
+| `python game.py tui` | Play the original terminal version |
+| `python game.py watch` | Terminal: attack every time you save your mission file |
+| `python game.py hack` | Terminal: attack once |
 | `python game.py reset` | Restore your mission file to its starter code |
-| `--fast` | Skip animations |
+| `--fast` | Skip terminal animations |
+
+Both versions share one save file, so you can switch between them at any time.
 
 ## How a mission works
 
@@ -50,24 +63,39 @@ plain-English translation.
 
 Level 1's cutscene renders your **anchor avatar**. Every later cutscene sends that image as a
 reference, so it's the same character in every scene. Set `"video_enabled": true` to animate each
-still with a camera move. Model ids and argument names live in `config.json`. If Higgsfield rejects
-a call, the game prints the error and continues with the terminal cutscene, so you never lose progress.
+still with a camera move. Model ids and argument names live in `config.json`.
+
+In the browser, rendering starts the moment you win, while you read the reward screen. Without a key,
+or if Higgsfield rejects a call, you get the in-engine cutscene instead, so you never lose progress.
+Rendered media is saved in `cutscenes/`.
+
+## Security
+
+The game server runs your code, so it only listens on `127.0.0.1`, ignores requests addressed to any
+other host name, and requires a secret token (new on every launch) for every API call. Other websites
+open in your browser can't use it.
 
 ## Layout
 
 ```
-game.py              entry point: menus, combat loop, rewards
+game.py              command line: browser (default) | tui | hack | watch | reset
 engine/
-  state.py           config.json + save.json, XP and ranks
+  session.py         GameSession: every game rule (attempts, par timer, XP, ranks, unlocks)
+  server.py          local web server: the client, a JSON API and live events
+  content.py         mission markdown -> HTML with highlighted Python
+  tui.py, ui.py      the Rich terminal version
+  state.py           config.json + save.json
   mission.py         Mission / Check / Fail: the level-building toolkit
   harness.py         grades your file inside an isolated subprocess
   runner.py          launches the harness with a timeout (catches infinite loops)
   errors.py          Python error -> plain English
-  ui.py              Rich HUD, sector map, battle animation, transmissions
   cinematics.py      Higgsfield cutscenes with character consistency
 levels/
   __init__.py        the 25-level campaign map
   level_01_*.py      one file per level: story, lesson, starter code, checks
+client/              the browser game (WebGL2, plain JavaScript modules, no build step)
 missions/            YOUR code lives here
 cutscenes/           generated images and videos
+tests/               python -m unittest discover -s tests
+docs/ARCHITECTURE.md how it all fits together
 ```

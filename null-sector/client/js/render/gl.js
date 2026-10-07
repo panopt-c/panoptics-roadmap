@@ -76,7 +76,7 @@ function compile(gl, type, source) {
 
 function shaderFailure(gl, shader, source, kind, label) {
   if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return null;
-  const log = (gl.getShaderInfoLog(shader) || '(no info log)').trim();
+  const log = (gl.getShaderInfoLog(shader) || '(no info log)').replace(/\0/g, '').trim();
   return `[gl] ${label}: ${kind} shader failed to compile\n${log}\n\n${annotate(source, log)}`;
 }
 

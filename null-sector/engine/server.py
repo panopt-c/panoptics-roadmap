@@ -225,9 +225,14 @@ class MissionWatcher:
             self._thread.join(timeout=2)
 
     def track(self, mission_id: str, rebaseline: bool = False) -> None:
-        """Watch this mission's file. Re-baselining adopts what is on disk now without reporting it."""
+        """Watch this mission's file. Re-baselining adopts what is on disk now without reporting it.
+
+        Only playable missions are tracked, so a refused request never steals the watch.
+        """
         with self._lock:
             if mission_id == self._mission and not rebaseline:
+                return
+            if not self._session.playable(mission_id):
                 return
             try:
                 path = self._session.mission_path(mission_id)
@@ -362,14 +367,20 @@ class CutsceneJobs:
                 return
             self._render(mission_id)
 
-    def _render(self, mission_id: str) -> None:
+    def _set_state(self, mission_id: str, state: str) -> None:
         with self._lock:
-            self._states[mission_id] = "rendering"
+            self._states[mission_id] = state
+
+    def _render(self, mission_id: str) -> None:
+        self._set_state(mission_id, "rendering")
         published = {"any": False, "failed": False}
 
         def progress(stage: str, state: str, entry: dict | None = None, error: str | None = None) -> None:
             if state == "fallback":
                 return
+            if state == "failed":
+                # Record it before the event lands, so a client retrying on that event is re-queued.
+                self._set_state(mission_id, "failed")
             payload = {"mission": mission_id, "state": state, "stage": stage}
             if entry:
                 payload["url"] = self._session.media_url(entry)
@@ -382,22 +393,21 @@ class CutsceneJobs:
             if state == "done":
                 self._broker.publish("state", self._session.snapshot())
 
-        final = "done"
         try:
             cutscene = self._session.cutscene(mission_id)
             if cutscene is not None:
                 self._session.cinema.render(cutscene, mission_id, on_progress=progress)
         except Exception as exc:  # noqa: BLE001 — a failed render must never take the server down
-            final = "failed"
+            self._set_state(mission_id, "failed")
             if not published["failed"]:
                 self._broker.publish("cutscene", {"mission": mission_id, "state": "failed", "stage": "still",
                                                   "error": f"{type(exc).__name__}: {exc}"})
-        if final == "done" and not published["any"]:
+            return
+        if not published["any"]:
             entry = self._session.cinema.best_entry(mission_id)
             if entry:
                 progress("video" if entry.get("kind") == "video" else "still", "done", entry=entry)
-        with self._lock:
-            self._states[mission_id] = final
+        self._set_state(mission_id, "done")
 
 
 # ── HTTP ────────────────────────────────────────────────────
@@ -422,6 +432,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     # quiet: the terminal belongs to the game banner
     def log_message(self, format, *args):  # noqa: A002 — signature fixed by the base class
         pass
+
+    def version_string(self) -> str:
+        return self.server_version
 
     def do_GET(self):
         self._handle("GET")
@@ -502,8 +515,9 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def api_deploy(self, mission_id: str) -> None:
         self._read_body()
-        payload = self.server.session.deploy(mission_id)
-        self.server.watcher.track(mission_id, rebaseline=True)
+        # Deploy may drop the starter file; the payload already carries it, so it is not an external edit.
+        with self.server.watcher.own_write(mission_id):
+            payload = self.server.session.deploy(mission_id)
         self._json(200, payload)
 
     def api_source(self, mission_id: str) -> None:
@@ -851,14 +865,17 @@ def create_server(session: GameSession, host: str = "127.0.0.1", port: int = DEF
                   client_dir: Path = CLIENT_DIR) -> GameServer:
     """Bind the first free port in [port, port + 20] (port 0 = any free port)."""
     _require_loopback(host)
-    candidates = [0] if port == 0 else range(port, port + PORT_FALLBACKS + 1)
+    if not 0 <= port <= 65535:
+        raise ValueError(f"port {port} is out of range (0-65535)")
+    last_port = min(port + PORT_FALLBACKS, 65535)
+    candidates = [0] if port == 0 else range(port, last_port + 1)
     last_error: OSError | None = None
     for candidate in candidates:
         try:
             return GameServer(session, (host, candidate), client_dir)
         except OSError as exc:
             last_error = exc
-    raise OSError(f"no free port between {port} and {port + PORT_FALLBACKS} ({last_error})")
+    raise OSError(f"no free port between {port} and {last_port} ({last_error})")
 
 
 def serve(session: GameSession, host: str = "127.0.0.1", port: int = DEFAULT_PORT, open_browser: bool = True,

@@ -16,6 +16,14 @@
  *    post effects stay alive during the freeze. A hit-stop ending mid-frame hands the
  *    leftover time to the sim, so freezes are exact to the sub-frame.
  *
+ * Frame pacing
+ *  - rAF timestamps jitter (and are coarsened by privacy-hardened browsers), while the display
+ *    really refreshes at a fixed period. An interval within 0.25 ms of 1–3 periods of a common
+ *    refresh rate is snapped to it, so at 60/120/144 Hz every frame advances the sim by the
+ *    same number of steps instead of alternating (e.g. 0, 2, 0, 2 at 120 Hz) — that alternation
+ *    is visible judder in anything that does not interpolate. The step test has a tiny epsilon
+ *    for the same reason: float error must not turn "exactly one step" into zero.
+ *
  * Robustness
  *  - dt is clamped to `maxFrame` (no spiral of death after a hitch or a debugger pause),
  *    and the number of sim steps per frame is bounded.
@@ -25,8 +33,24 @@
  *    ("degrade, never break"). The next frame is scheduled before any system runs.
  *
  * Performance: zero allocations per tick — the rAF callback is bound once, systems live in
- * flat arrays iterated by index, removals requested mid-tick are deferred to its end.
+ * flat arrays iterated by index, removals requested mid-tick are deferred to its end. Even the
+ * numbers handed to systems are free: a freshly computed double crossing a (megamorphic) call
+ * is boxed into a new heap number by V8, so `dt`/`alpha`/`step` are passed from tagged fields
+ * that are only reassigned when the value changes (measured: ~33 B/frame → 0).
  */
+/** Refresh periods (s) that measured frame intervals snap to. */
+const REFRESH = new Float64Array([60, 120, 144, 165, 240, 90, 75, 100, 50].map((hz) => 1 / hz));
+const SNAP_TOLERANCE = 0.00025;
+
+function snapInterval(dt) {
+  for (let i = 0; i < REFRESH.length; i++) {
+    const p = REFRESH[i];
+    const n = Math.round(dt / p);
+    if (n >= 1 && n <= 3 && Math.abs(dt - n * p) < SNAP_TOLERANCE) return n * p;
+  }
+  return dt;
+}
+
 export class Loop {
   /** Multiplies simulation time (slow motion < 1 < fast forward). 0 pauses the sim. */
   timeScale = 1;
@@ -50,6 +74,10 @@ export class Loop {
   #alpha = 0;
 
   #frameMs = 1000 / 60; // EMA of the real frame interval
+  // Boxed copies of the values passed to systems (see the header: no per-call heap numbers).
+  #stepArg = null;
+  #dtArg = null;
+  #alphaArg = null;
   #cpuMs = 0; // EMA of time spent inside tick()
 
   #onFrame = (t) => this.#tick(t);
@@ -173,9 +201,11 @@ export class Loop {
     let dt = this.#last < 0 ? 0 : (t - this.#last) / 1000;
     this.#last = t;
     if (dt > 0) {
-      // Time-constant EMA (~0.25 s) so the stat means the same thing at any refresh rate.
+      // Time-constant EMA (~0.25 s) of the raw interval, so the stat means the same thing at
+      // any refresh rate.
       const k = 1 - Math.exp(-Math.min(dt, 1) / 0.25);
       this.#frameMs += (Math.min(dt, 1) * 1000 - this.#frameMs) * k;
+      dt = snapInterval(dt);
     } else {
       dt = 0;
     }
@@ -197,18 +227,21 @@ export class Loop {
     this.#acc += simDt * scale;
 
     const step = this.#step;
+    if (this.#stepArg !== step) this.#stepArg = step;
+    const stepArg = this.#stepArg;
     const updaters = this.#updaters;
     const framers = this.#framers;
     this.#inTick = true;
 
     let steps = 0;
-    while (this.#acc >= step) {
+    const threshold = step * (1 - 1e-6);
+    while (this.#acc >= threshold) {
       this.#acc -= step;
       this.#time += step;
       for (let i = 0; i < updaters.length; i++) {
         const system = updaters[i];
         try {
-          system.update(step);
+          system.update(stepArg);
         } catch (err) {
           this.#fault(system, 'update', err);
         }
@@ -219,12 +252,17 @@ export class Loop {
       }
     }
 
+    if (this.#acc < 0) this.#acc = 0; // absorbed epsilon
     const alpha = this.#acc / step;
     this.#alpha = alpha;
+    if (this.#dtArg !== dt) this.#dtArg = dt;
+    if (this.#alphaArg !== alpha) this.#alphaArg = alpha;
+    const dtArg = this.#dtArg;
+    const alphaArg = this.#alphaArg;
     for (let i = 0; i < framers.length; i++) {
       const system = framers[i];
       try {
-        system.frame(dt, alpha);
+        system.frame(dtArg, alphaArg);
       } catch (err) {
         this.#fault(system, 'frame', err);
       }
