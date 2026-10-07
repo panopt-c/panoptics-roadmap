@@ -445,3 +445,103 @@ activity ids), `equip(save, augment_id, slot)`, `activate(save, run, augment_id)
 (effect payload). API: `GET /api/rig`, `POST /api/rig/equip {augment_id, slot}`,
 `POST /api/runs/:id/augment {augment_id}`, `POST /api/missions/:id/augment {augment_id}`.
 `State.profile` gains `flux` and `slots`.
+
+---
+
+## 11. The 3D world (three.js r186, vendored in client/vendor/three)
+
+`index.html` adds an import map:
+`{"imports": {"three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/"}}`.
+No CDN, no build step. Everything 3D is procedural or code-built, so every asset is
+licence-clean in a public repo.
+
+### 11.1 One renderer
+
+A single `THREE.WebGLRenderer` owns `#gl`. `render/renderer.js` keeps its **public API
+unchanged** (ARCHITECTURE §4.4: `ok, world, particles, post, update, frame, setMood, flash,
+setFocus, stats, dispose`), so every screen keeps working while the internals become:
+
+1. **Backdrop**: the existing `world.js` sky/skyline shader as a three `ShaderMaterial`. It's the
+   full backdrop behind 2D screens, and the sky seen through the Monastery's open roof
+   (view-direction based).
+2. **Scene**: the active 3D scene from the `SceneDirector` (`monastery`, a sector diorama, or a
+   cutscene stage), via `RenderPass`.
+3. **Particles**: the screen-space particle system (same `emit/emitPoints` API) as an
+   instanced overlay pass.
+4. **Post**: bloom (UnrealBloomPass or the existing Karis bloom), then a grade pass (ACES,
+   chromatic aberration, grain, scanlines, vignette, flash, focus darken/blur), then OutputPass.
+
+Moods (§4.4 presets) drive fog colour and density, key light colours, emissive intensity, the
+Core beam and the backdrop uniforms. The existing adaptive-quality governor scales pixel ratio
+(0.6–1 × DPR) and the shadow map.
+
+### 11.2 The Monastery (walkable hub)
+
+The inside of a colossal ruined cooling tower turned sanctuary: a circular nave (radius
+≈ 22 m) with a wet, reflective floor; rain and the Core's beam fall through the open roof;
+light shafts; rings of server-rack shrines with flickering status lights; cables, banners,
+candle-like LED clusters. Stations:
+
+| Station | Where | Opens |
+|---|---|---|
+| Scriptorium dais + campaign terminal, holographic sector map (5 rings; levels as nodes from `State`) | centre | mission deploy / sector map |
+| CIPHER (holographic figure, scan-line shader) | beside the terminal | tutorial barks, contacts |
+| NOVA at the dispatch board | east | training |
+| RUST's stall in the undercroft (stairs down, glowing stalls) | south | shop |
+| VEX at the Arena gate (a ring-shaped pit visible beyond) | west | arena |
+| Command Center console by the great window | north | productivity |
+| Codex monoliths | around the nave | contacts / lore |
+| Order monks (3–6) patrolling or kneeling at shrines | ambient | barks |
+
+**Controls**: WASD or arrows move relative to the camera; Shift sprints; drag the mouse
+(or pointer lock) to orbit; E or Enter interacts; Tab or M opens the classic 2D hub (map,
+accessibility fallback); Esc opens settings. The spring-arm camera has collision, damping, a
+little lag, and an FOV kick on sprint. Within ≈ 2.2 m of a station a 3D-anchored prompt
+appears ("E · TALK — RUST", "E · DEPLOY — L02 SIGNAL NOISE"). Interacting turns the NPC to
+face you (head look-at), plays a bark in the dialogue bar, then opens the screen.
+
+**The world shows progress**: each cleared sector lights another band of the tower's light
+strips; boss trophies (holographic heads) appear on the dais; the arena division banner
+hangs at the gate; more monks appear as trust grows.
+
+### 11.3 Characters
+
+All procedural: hierarchies of three primitives plus lathe/extrude/tube geometry, with custom
+materials (cloth robes, worn metal, emissive visors). Rigged by code (pelvis → spine →
+chest → neck → head; shoulders → arms; hips → legs) and animated procedurally: phase-based
+walk and run cycles matched to speed (no foot sliding), idle breathing, sway, head look-at,
+gesture loops, all smoothed with springs (`core/math.js`). The player is the hooded engineer
+from `config.avatar` (black jacket, cyan seams, cracked visor). Each NPC has a distinct
+silhouette and colour per §5.1, readable from 20 m.
+
+### 11.4 Sector dioramas and cutscenes
+
+Behind mission and run screens, a slow cinematic orbit of the current sector: Dead Zone
+(flooded server farm), Grid (neon lattice), Foundry (furnaces, molten channels), Archive
+(endless data stacks), Core (the monolith). Blurred and darkened by `setFocus`. Cutscenes
+(§9) are staged in-engine: camera rails over these dioramas and characters, with letterbox,
+subtitles and voice. Higgsfield media is an optional overlay.
+
+### 11.5 Budgets and fallbacks
+
+60 fps at 1080p on integrated GPUs: ≤ 150 draw calls (instancing, merged static geometry),
+≤ 300k visible triangles, one shadow-casting light, ≤ 6 dynamic point lights (the rest is
+emissive + bloom), no per-frame allocations, GPU resources disposed when a scene unloads.
+No WebGL2 means the classic 2D hub and the CSS backdrop. New settings: `mouseSensitivity`,
+`invertY`, `cameraBob` (off under reduced motion), `classicHub`.
+
+---
+
+## 12. Voice acting (ElevenLabs, generated at development time)
+
+Voices are generated **once, from the development session**, never at runtime, so no keys
+ship with the game. Each main NPC gets one ElevenLabs library voice matching §5.1. Voiced
+lines: every `intro`/`victory` dialogue sequence, boss lines, cutscene narration lines that
+have a speaker, and hub/arena/shop barks. Crash/fail pools stay text-only.
+
+* Files: `client/audio/voice/<npc>/<id>.mp3`, where `id` = first 12 hex chars of
+  `sha1(speaker + "\n" + text)` (computed the same way client- and server-side).
+* Manifest: `client/audio/voice/manifest.json` → `{id: {npc, file, seconds}}`.
+* `DialogueOverlay` plays a line's voice when the manifest has it: the music bus ducks
+  −8 dB, subtitles always show, and the new setting `voiceVolume` controls the level.
+* Budget: confirm with the player before generating more than ~150 lines.
