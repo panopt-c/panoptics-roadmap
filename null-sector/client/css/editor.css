@@ -1,0 +1,740 @@
+/*
+ * CodeEditor skin (docs/ARCHITECTURE.md §4.4, art bible §6).
+ *
+ * Alignment contract: `.ce-code` (highlighted lines) and `.ce-input` (the transparent textarea)
+ * must lay out text identically, so every property that can move a glyph is declared once, in
+ * the shared rule below, for both. Token colours may change; font weight/style/width may not
+ * (no bold, no italics, no ligatures: they would desynchronise the caret).
+ *
+ * Tunables (set on `.ce` or any ancestor):
+ *   --ce-font-size  --ce-lh  (line pitch, px)  --ce-pad-t  --ce-pad-l  --ce-pad-r
+ *   --accent / --accent-rgb  recolour the caret, selection, focus ring and current line.
+ */
+
+.ce {
+  --ce-font-size: 14px;
+  --ce-lh: 22px;
+  --ce-pad-t: 14px;
+  --ce-pad-l: 18px;
+  --ce-pad-r: 32px;
+  --ce-digits: 2;
+  --ce-gutter-w: calc(var(--ce-digits) * 1ch + 40px);
+  --ce-blood-rgb: 255, 51, 85;
+
+  /* surfaces */
+  --ce-bg: rgba(3, 5, 10, 0.72);
+  --ce-gutter-bg: #060910;
+  --ce-guide: rgba(136, 146, 166, 0.09);
+  --ce-num: #343c4b;
+  --ce-num-active: #e6f4ff;
+
+  /* syntax — cool = structure, warm = values, magenta = text, slate = commentary */
+  --syn-text: #c5cfde;
+  --syn-keyword: #29e3f3;
+  --syn-builtin: #5aa8ff;
+  --syn-call: #a5c8f5;
+  --syn-def: #f2f8ff;
+  --syn-class: #ffd27a;
+  --syn-self: #c9a3ff;
+  --syn-decorator: #b98cff;
+  --syn-constant: #ff8d66;
+  --syn-caps: #ffbe85;
+  --syn-number: #ffb547;
+  --syn-string: #ff6ad5;
+  --syn-prefix: #ffa3e6;
+  --syn-escape: #ffc46b;
+  --syn-interp: #4cecff;
+  --syn-spec: #ffb2ec;
+  --syn-doc: #9a83b8;
+  --syn-op: #7ed6ea;
+  --syn-punct: #6d7a90;
+  --syn-bracket: #9eabc0;
+  --syn-comment: #66758b;
+  --syn-comment-code: #86c9d6;
+  --syn-header: #a6bad1;
+  --syn-todo: #ffb000;
+
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  contain: strict;
+  isolation: isolate;
+  background: var(--ce-bg);
+  color: var(--syn-text);
+  font-family: var(--font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: var(--ce-font-size);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* focus: a hairline that wakes up, plus a whisper of inner light along the top edge */
+.ce::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0);
+  background: linear-gradient(to bottom, rgba(var(--accent-rgb), 0.07), rgba(var(--accent-rgb), 0) 46px);
+  opacity: 0;
+  transition:
+    opacity var(--t-med, 220ms) var(--ease-out, ease-out),
+    box-shadow var(--t-med, 220ms) var(--ease-out, ease-out);
+}
+
+.ce:focus-within::after {
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.3);
+}
+
+.ce.is-readonly .ce-input {
+  cursor: default;
+}
+
+/* ── scrolling ────────────────────────────────────────────────────────────────────────── */
+
+.ce-scroller {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding: calc(var(--ce-lh) * 2) 0 calc(var(--ce-lh) * 2) var(--ce-gutter-w);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), 0.24) transparent;
+}
+
+.ce-scroller::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.ce-scroller::-webkit-scrollbar-track,
+.ce-scroller::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.ce-scroller::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-rgb), 0.2);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.ce-scroller::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(var(--accent-rgb), 0.38);
+}
+
+.ce-content {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+/* ── shared text metrics: the highlighted layer and the textarea MUST agree ───────────── */
+
+.ce-code,
+.ce-input,
+.ce-nums,
+.ce-gcur,
+.ce-probe {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 400;
+  font-style: normal;
+  font-stretch: normal;
+  font-synthesis: none;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+  line-height: var(--ce-lh);
+  letter-spacing: 0;
+  word-spacing: 0;
+  text-indent: 0;
+  text-transform: none;
+  text-align: left;
+  tab-size: 4;
+  -moz-tab-size: 4;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  direction: ltr;
+  unicode-bidi: normal;
+}
+
+/* ── gutter ───────────────────────────────────────────────────────────────────────────── */
+
+.ce-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  flex: none;
+  width: var(--ce-gutter-w);
+  background: var(--ce-gutter-bg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* the gutter edge: a faint neon seam that brightens with focus */
+.ce-gutter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(var(--accent-rgb), 0.1);
+  transition: background-color var(--t-med, 220ms) var(--ease-out, ease-out);
+}
+.ce:focus-within .ce-gutter::after {
+  background: rgba(var(--accent-rgb), 0.18);
+}
+
+.ce-nums,
+.ce-gcur {
+  padding-right: 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ce-nums {
+  padding-top: var(--ce-pad-t);
+  color: var(--ce-num);
+}
+
+.ce-gcur {
+  position: absolute;
+  top: var(--ce-pad-t);
+  left: 0;
+  right: 1px;
+  height: var(--ce-lh);
+  transform: translate3d(0, calc(var(--line, 0) * var(--ce-lh)), 0);
+  background: var(--ce-gutter-bg);
+  color: #5d6b80;
+  transition: color var(--t-med, 220ms) var(--ease-out, ease-out);
+}
+.ce:focus-within .ce-gcur {
+  color: var(--ce-num-active);
+  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.55);
+}
+
+/* error marker: replaces the line number, with a pulsing pip */
+.ce-gmark {
+  position: absolute;
+  top: var(--ce-pad-t);
+  left: 0;
+  right: 1px;
+  z-index: 1;
+  height: var(--ce-lh);
+  transform: translate3d(0, calc(var(--line, 0) * var(--ce-lh)), 0);
+  transition: transform 140ms var(--ease-out, ease-out);
+  background: linear-gradient(90deg, var(--ce-gutter-bg) 0%, rgba(var(--ce-blood-rgb), 0.1) 55%, rgba(var(--ce-blood-rgb), 0.26) 100%), var(--ce-gutter-bg);
+  box-shadow: inset -2px 0 0 rgb(var(--ce-blood-rgb));
+  animation: ce-gmark-in 420ms var(--ease-back, ease-out) both;
+}
+
+.ce-gmark__num {
+  position: absolute;
+  right: 16px;
+  top: 0;
+  line-height: var(--ce-lh);
+  color: #ffd3da;
+  text-shadow: 0 0 8px rgba(var(--ce-blood-rgb), 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.ce-gmark__pip {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  background: rgb(var(--ce-blood-rgb));
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px rgba(var(--ce-blood-rgb), 0.95), 0 0 2px #fff;
+  animation: ce-pip 1.6s var(--ease-in-out, ease-in-out) 420ms infinite;
+}
+
+.ce-gmark.is-stale {
+  box-shadow: inset -2px 0 0 rgba(var(--ce-blood-rgb), 0.45);
+}
+.ce-gmark.is-stale .ce-gmark__pip {
+  animation: none;
+  opacity: 0.45;
+  box-shadow: none;
+}
+.ce-gmark.is-stale .ce-gmark__num {
+  color: #c98c96;
+  text-shadow: none;
+}
+
+/* ── code area ────────────────────────────────────────────────────────────────────────── */
+
+.ce-area {
+  position: relative;
+  flex: 1 0 auto;
+}
+
+.ce-under,
+.ce-widgets {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ce-under {
+  z-index: 0;
+}
+.ce-widgets {
+  z-index: 4;
+}
+
+.ce-code {
+  position: relative;
+  z-index: 1;
+  /* right padding: textarea's padding + 4ch slack so it never overflows by a keystroke */
+  padding: var(--ce-pad-t) calc(var(--ce-pad-r) + 4ch) 50vh var(--ce-pad-l);
+  color: var(--syn-text);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ce-ln {
+  min-height: var(--ce-lh);
+}
+
+/* indent guides: one hairline per level, drawn by the line box itself (full line height) */
+.ce-ln.ig {
+  background-image: repeating-linear-gradient(90deg, var(--ce-guide) 0 1px, transparent 1px 4ch);
+  background-size: calc(var(--ig, 0) * 4ch) 100%;
+  background-repeat: no-repeat;
+}
+
+/* section headers (`# -- OBJECTIVE 1 ----`): a faint band and rule, so a file reads as chapters */
+.ce-ln.is-hd {
+  background-image: linear-gradient(90deg, rgba(var(--accent-rgb), 0.075), rgba(var(--accent-rgb), 0.02) 46%, rgba(var(--accent-rgb), 0) 78%);
+  box-shadow: inset 0 1px 0 rgba(var(--accent-rgb), 0.07);
+}
+.ce-ln.is-hd.ig {
+  background-image:
+    repeating-linear-gradient(90deg, var(--ce-guide) 0 1px, transparent 1px 4ch),
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.075), rgba(var(--accent-rgb), 0.02) 46%, rgba(var(--accent-rgb), 0) 78%);
+  background-size: calc(var(--ig, 0) * 4ch) 100%, 100% 100%;
+}
+
+.ce-input {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: var(--ce-pad-t) var(--ce-pad-r) 0 var(--ce-pad-l);
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--accent);
+  resize: none;
+  overflow: hidden;
+  appearance: none;
+  -webkit-appearance: none;
+  scrollbar-width: none;
+}
+
+/* the editor draws its own focus treatment (.ce:focus-within); beat any global focus ring */
+.ce .ce-input:focus,
+.ce .ce-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.ce-input::selection {
+  background: rgba(var(--accent-rgb), 0.24);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.ce-input:not(:focus)::selection {
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+/* off-screen character-width probe (64 × "0") */
+.ce-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── current line ─────────────────────────────────────────────────────────────────────── */
+
+.ce-curline {
+  position: absolute;
+  top: var(--ce-pad-t);
+  left: 0;
+  right: 0;
+  height: var(--ce-lh);
+  transform: translate3d(0, calc(var(--line, 0) * var(--ce-lh)), 0);
+  transition:
+    transform 90ms var(--ease-out, ease-out),
+    opacity var(--t-med, 220ms) var(--ease-out, ease-out);
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.075), rgba(var(--accent-rgb), 0.035) 40%, rgba(var(--accent-rgb), 0.025));
+  opacity: 0.35;
+}
+
+/* the insertion edge: a lit 2 px bar hugging the gutter seam */
+.ce-curline::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.9);
+  opacity: 0;
+  transition: opacity var(--t-med, 220ms) var(--ease-out, ease-out);
+}
+
+.ce:focus-within .ce-curline {
+  opacity: 1;
+}
+.ce:focus-within .ce-curline::before {
+  opacity: 0.95;
+}
+.ce.has-selection .ce-curline {
+  opacity: 0.25;
+}
+
+/* keystroke bloom: centred on the caret, faded by editor.js on every (throttled) keystroke */
+.ce-heat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 7ch;
+  height: calc(var(--ce-lh) * 2);
+  margin: calc(var(--ce-lh) * -0.5) 0 0 -3.5ch;
+  transform: translate3d(
+    calc(var(--ce-pad-l) + var(--col, 0) * 1ch),
+    calc(var(--ce-pad-t) + var(--line, 0) * var(--ce-lh)),
+    0
+  );
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.28), rgba(var(--accent-rgb), 0.08) 55%, rgba(var(--accent-rgb), 0));
+  opacity: 0;
+}
+
+/* ── active block guide: the indent guide of the block holding the caret ─────────────── */
+
+.ce-aguide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: calc(var(--len, 0) * var(--ce-lh));
+  transform: translate3d(
+    calc(var(--ce-pad-l) + var(--col, 0) * 1ch),
+    calc(var(--ce-pad-t) + var(--line, 0) * var(--ce-lh)),
+    0
+  );
+  background: linear-gradient(to bottom, rgba(var(--accent-rgb), 0.5), rgba(var(--accent-rgb), 0.28));
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out, ease-out);
+}
+.ce:focus-within .ce-aguide.is-on {
+  opacity: 1;
+}
+
+/* ── bracket matching ─────────────────────────────────────────────────────────────────── */
+
+.ce-match {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1ch;
+  height: var(--ce-lh);
+  transform: translate3d(
+    calc(var(--ce-pad-l) + var(--col, 0) * 1ch),
+    calc(var(--ce-pad-t) + var(--line, 0) * var(--ce-lh)),
+    0
+  );
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.13);
+  opacity: 0;
+}
+.ce-match.is-on {
+  opacity: 1;
+}
+.ce-match.is-bad {
+  box-shadow: inset 0 0 0 1px rgba(var(--ce-blood-rgb), 0.7);
+  background: rgba(var(--ce-blood-rgb), 0.16);
+}
+.ce:not(:focus-within) .ce-match {
+  opacity: 0;
+}
+
+/* ── error line glow ──────────────────────────────────────────────────────────────────── */
+
+.ce-errline {
+  position: absolute;
+  top: var(--ce-pad-t);
+  left: 0;
+  right: 0;
+  height: var(--ce-lh);
+  transform: translate3d(0, calc(var(--line, 0) * var(--ce-lh)), 0);
+  transition: transform 140ms var(--ease-out, ease-out);
+}
+
+/* the band: sweeps in from the gutter like a scan locking on */
+.ce-errline::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(var(--ce-blood-rgb), 0.34), rgba(var(--ce-blood-rgb), 0.13) 38%, rgba(var(--ce-blood-rgb), 0.035) 85%);
+  box-shadow:
+    inset 3px 0 0 rgb(var(--ce-blood-rgb)),
+    inset 0 1px 0 rgba(var(--ce-blood-rgb), 0.42),
+    inset 0 -1px 0 rgba(var(--ce-blood-rgb), 0.42);
+  transform-origin: 0 50%;
+  animation: ce-err-sweep 460ms var(--ease-out, ease-out) both;
+  transition: opacity var(--t-med, 220ms) var(--ease-out, ease-out);
+}
+
+/* the pulse: a soft bloom that breathes around the line (opacity only — compositor) */
+.ce-errline::after {
+  content: '';
+  position: absolute;
+  inset: -7px 0;
+  background: radial-gradient(120% 60% at 0% 50%, rgba(var(--ce-blood-rgb), 0.34), rgba(var(--ce-blood-rgb), 0) 70%);
+  opacity: 0;
+  animation: ce-err-pulse 1.6s var(--ease-in-out, ease-in-out) 460ms infinite;
+}
+
+.ce-errline.is-stale::before {
+  opacity: 0.4;
+}
+.ce-errline.is-stale::after {
+  animation: none;
+  opacity: 0;
+}
+
+/* ── inline error widget ──────────────────────────────────────────────────────────────── */
+
+.ce-widget {
+  --x: calc(var(--ce-pad-l) + var(--col, 0) * 1ch);
+  position: absolute;
+  top: calc(var(--ce-pad-t) + 6px); /* WIDGET_GAP_TOP in editor.js */
+  left: max(6px, calc(var(--x) - 10px));
+  max-width: min(74ch, calc(var(--ce-view-w, 100%) - var(--x) - 6px));
+  min-width: min(30ch, calc(var(--ce-view-w, 100%) - var(--x) - 6px));
+  transform: translate3d(0, calc((var(--line, 0) + 1) * var(--ce-lh)), 0);
+  transition:
+    transform 140ms var(--ease-out, ease-out),
+    opacity 180ms var(--ease-out, ease-out);
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.6));
+  animation: ce-widget-in 380ms var(--ease-out, ease-out) both;
+}
+
+/* notch pointing up at the faulty line */
+.ce-widget::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 16px;
+  width: 9px;
+  height: 9px;
+  background: #2a0b14;
+  border-top: 1px solid rgba(var(--ce-blood-rgb), 0.6);
+  border-left: 1px solid rgba(var(--ce-blood-rgb), 0.6);
+  transform: rotate(45deg);
+}
+
+.ce-widget__box {
+  position: relative;
+  box-sizing: border-box;
+  padding: 7px 14px 9px 15px;
+  background: linear-gradient(180deg, rgba(42, 11, 20, 0.97), rgba(20, 6, 11, 0.97));
+  border: 1px solid rgba(var(--ce-blood-rgb), 0.5);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  box-shadow: inset 3px 0 0 rgb(var(--ce-blood-rgb)), inset 0 0 24px rgba(var(--ce-blood-rgb), 0.08);
+}
+
+.ce-widget__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 3px;
+  font: 600 10.5px/1.5 var(--font-display, system-ui, sans-serif);
+  letter-spacing: var(--tracking-label, 0.18em);
+  text-transform: uppercase;
+}
+
+.ce-widget__tag {
+  color: rgb(var(--ce-blood-rgb));
+  text-shadow: 0 0 10px rgba(var(--ce-blood-rgb), 0.7);
+}
+.ce-widget__tag::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  vertical-align: 1px;
+  background: currentColor;
+  transform: rotate(45deg);
+  box-shadow: 0 0 6px currentColor;
+}
+
+.ce-widget__tag.is-type {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.ce-widget__ln {
+  color: rgba(255, 196, 206, 0.55);
+  font-family: var(--font-mono, monospace);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+
+.ce-widget__msg {
+  color: #ffdfe4;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ce-widget__msg code {
+  padding: 0 4px;
+  color: #fff;
+  background: rgba(var(--ce-blood-rgb), 0.16);
+  border: 1px solid rgba(var(--ce-blood-rgb), 0.28);
+  font-family: inherit;
+  font-size: 0.95em;
+}
+
+/* the caret is working underneath: get out of the way */
+.ce-widget.is-faded {
+  opacity: 0.12;
+}
+.ce-widget.is-stale:not(.is-faded) {
+  opacity: 0.5;
+}
+
+/* ── overview ruler (error ticks over the scrollbar track) ────────────────────────────── */
+
+.ce-ruler {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 7;
+  width: 10px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-med, 220ms) var(--ease-out, ease-out);
+}
+.ce-ruler.is-on {
+  opacity: 1;
+}
+
+.ce-rmark {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  width: 8px;
+  height: 3px;
+  background: rgb(var(--ce-blood-rgb));
+  box-shadow: 0 0 6px rgba(var(--ce-blood-rgb), 0.9);
+}
+.ce-rmark.is-stale {
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.ce-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── syntax ───────────────────────────────────────────────────────────────────────────── */
+
+.ce-code .c-k { color: var(--syn-keyword); }
+.ce-code .c-b { color: var(--syn-builtin); }
+.ce-code .c-fc { color: var(--syn-call); }
+.ce-code .c-fn { color: var(--syn-def); text-shadow: 0 0 12px rgba(var(--accent-rgb), 0.35); }
+.ce-code .c-cl { color: var(--syn-class); }
+.ce-code .c-sf { color: var(--syn-self); }
+.ce-code .c-dc { color: var(--syn-decorator); }
+.ce-code .c-c { color: var(--syn-constant); }
+.ce-code .c-cn { color: var(--syn-caps); }
+.ce-code .c-n { color: var(--syn-number); }
+.ce-code .c-s { color: var(--syn-string); }
+.ce-code .c-sp { color: var(--syn-prefix); }
+.ce-code .c-se { color: var(--syn-escape); }
+.ce-code .c-si { color: var(--syn-interp); }
+.ce-code .c-fs { color: var(--syn-spec); }
+.ce-code .c-ds { color: var(--syn-doc); }
+.ce-code .c-o { color: var(--syn-op); }
+.ce-code .c-p { color: var(--syn-punct); }
+.ce-code .c-br { color: var(--syn-bracket); }
+.ce-code .c-cm { color: var(--syn-comment); }
+.ce-code .c-ch { color: var(--syn-header); }
+.ce-code .c-cc { color: var(--syn-comment-code); }
+.ce-code .c-td { color: var(--syn-todo); }
+
+/* ── motion ───────────────────────────────────────────────────────────────────────────── */
+
+@keyframes ce-err-sweep {
+  0% { transform: scaleX(0); opacity: 0; filter: brightness(2.4); }
+  35% { opacity: 1; }
+  100% { transform: scaleX(1); opacity: 1; filter: brightness(1); }
+}
+
+@keyframes ce-err-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 1; }
+}
+
+@keyframes ce-pip {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes ce-gmark-in {
+  0% { opacity: 0; filter: brightness(2.5); }
+  100% { opacity: 1; filter: brightness(1); }
+}
+
+@keyframes ce-widget-in {
+  0% { opacity: 0; translate: 0 -6px; clip-path: inset(0 100% 0 0); }
+  18% { opacity: 1; translate: 3px -6px; }
+  26% { translate: -2px -3px; }
+  100% { opacity: 1; translate: 0 0; clip-path: inset(-100px); }
+}
+
+.ce--still *,
+.ce--still *::before,
+.ce--still *::after {
+  animation: none !important;
+  transition: none !important;
+}

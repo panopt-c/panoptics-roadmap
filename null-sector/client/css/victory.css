@@ -1,0 +1,698 @@
+/*
+ * Victory screen — the reward ceremony (docs/ARCHITECTURE.md §6).
+ *
+ * Every revealable element starts hidden and animates in when the script adds `.is-in`;
+ * stamps additionally get `.is-slam` (accelerate into the page, overshoot, settle — the
+ * impact lands at 60 % = 170 ms, matching STAMP_IMPACT_MS in victory.js). `.is-instant` on
+ * the root collapses every entrance when the player skips. Colours follow the bible:
+ * acid = success, blood = the deleted enemy, amber = the speed stamp, magenta = narrative
+ * (rank-up, transmission).
+ */
+
+.screen.screen--victory {
+  --acid-rgb: 57, 255, 20;
+  --blood-rgb: 255, 51, 85;
+  --amber-rgb: 255, 176, 0;
+  --magenta-rgb: 255, 43, 214;
+  --cyan-rgb: 0, 240, 255;
+  --accent: var(--acid);
+  --accent-rgb: var(--acid-rgb);
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.victory__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 46% 30% at 50% 20%, rgba(var(--acid-rgb), 0.16), transparent 72%),
+    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(5, 6, 10, 0.7), transparent 70%);
+}
+
+.victory {
+  position: relative;
+  width: min(1120px, calc(100% - 2 * var(--gutter)));
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(20px, 6vh, 64px) 0 clamp(36px, 7vh, 72px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 2.2vh, 20px);
+  scrollbar-width: none;
+}
+
+/* the column scrolls when short; nothing in it may be squeezed (app.css panels allow min-height 0) */
+.victory > * {
+  flex-shrink: 0;
+}
+
+/* ── headline ───────────────────────────────────────────────────────── */
+
+.victory__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.victory__kicker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(420px, 100%);
+  color: var(--acid);
+  animation: v-fade-in 480ms var(--ease-out) both;
+}
+
+.victory__kicker-rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, rgba(var(--acid-rgb), 0.5), rgba(var(--acid-rgb), 0.05));
+}
+
+.victory__kicker .mono {
+  letter-spacing: 0.08em;
+}
+
+.victory__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(40px, 6.9vw, 108px);
+  line-height: 0.95;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #ecffe4;
+  text-shadow:
+    -1px 0 rgba(var(--magenta-rgb), 0.5),
+    1px 0 rgba(var(--cyan-rgb), 0.5),
+    0 0 22px rgba(var(--acid-rgb), 0.6),
+    0 0 64px rgba(var(--acid-rgb), 0.28);
+  opacity: 0;
+}
+
+.victory__title.is-in {
+  opacity: 1;
+  animation: v-chroma 1100ms var(--ease-out) both;
+}
+
+/* ── stamps ─────────────────────────────────────────────────────────── */
+
+.screen--victory .stamp {
+  --stamp-rgb: var(--blood-rgb);
+  --stamp-rot: -3deg;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  padding: 7px 14px 6px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgb(var(--stamp-rgb));
+  border: 2px solid rgba(var(--stamp-rgb), 0.9);
+  background: rgba(var(--stamp-rgb), 0.07);
+  box-shadow: 0 0 18px rgba(var(--stamp-rgb), 0.28), inset 0 0 14px rgba(var(--stamp-rgb), 0.16);
+  text-shadow: 0 0 10px rgba(var(--stamp-rgb), 0.55);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transform: rotate(var(--stamp-rot));
+  opacity: 0;
+}
+
+.screen--victory .stamp.is-slam {
+  animation: v-slam 300ms cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+
+.victory__deleted {
+  font-size: clamp(14px, 1.5vw, 19px);
+  padding: 9px 18px 8px;
+}
+
+.victory__enemy {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.victory__dash {
+  opacity: 0.6;
+}
+
+.screen--victory .stamp--bonus {
+  --stamp-rgb: var(--amber-rgb);
+  --stamp-rot: -4deg;
+  font-size: 12px;
+  padding: 5px 10px 4px;
+}
+
+.screen--victory .stamp--replay {
+  --stamp-rgb: var(--cyan-rgb);
+  --stamp-rot: -2deg;
+  font-size: 15px;
+}
+
+/* ── reward panel ───────────────────────────────────────────────────── */
+
+.victory__panel {
+  width: min(580px, 100%);
+  opacity: 0;
+  transform: translateY(16px) scale(0.985);
+}
+
+.victory__panel.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 420ms var(--ease-out), transform 520ms var(--ease-out);
+}
+
+.victory__panel .panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.victory__panel .panel__body {
+  padding-top: 6px;
+}
+
+.victory__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reward {
+  display: grid;
+  grid-template-columns: auto minmax(24px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 2px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--steel);
+  opacity: 0;
+  transform: translateX(-14px);
+}
+
+.reward.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 300ms var(--ease-out), transform 360ms var(--ease-out);
+}
+
+.reward__label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.reward__detail {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.reward__leader {
+  height: 1px;
+  align-self: center;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 5px 1px;
+}
+
+.reward__value {
+  min-width: 5ch;
+  text-align: right;
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--acid);
+  text-shadow: 0 0 12px rgba(var(--acid-rgb), 0.5);
+}
+
+.reward--bonus .reward__value {
+  color: var(--amber);
+  text-shadow: 0 0 12px rgba(var(--amber-rgb), 0.5);
+}
+
+.reward--missed {
+  color: var(--dim);
+}
+
+.reward--missed .reward__detail {
+  color: var(--dim);
+}
+
+.reward--missed .reward__value {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
+  color: var(--dim);
+  text-shadow: none;
+}
+
+.reward--total {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(var(--acid-rgb), 0.22);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.reward--total .reward__value {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.reward--total.is-hot .reward__value {
+  animation: v-pop 460ms var(--ease-back);
+}
+
+.victory__replay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0 8px;
+  text-align: center;
+}
+
+.victory__replay p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--steel);
+  opacity: 0;
+  transition: opacity 400ms var(--ease-out) 200ms;
+}
+
+.victory__replay.is-in p {
+  opacity: 1;
+}
+
+/* XP meter */
+.victory__xp {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.victory__xp.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 320ms var(--ease-out), transform 380ms var(--ease-out);
+}
+
+.victory__xp-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.victory__rank {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: var(--tracking-display);
+  color: var(--text);
+}
+
+.victory__xp-num {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.victory__meter {
+  height: 8px;
+}
+
+.victory__meter .meter__fill {
+  transition-duration: 0ms;
+}
+
+.victory__meter.is-filling .meter__fill {
+  transition-duration: 760ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.victory__meter.is-rollover .meter__fill {
+  transition: none;
+}
+
+/* ── rank up / identity ─────────────────────────────────────────────── */
+
+.victory__rankup {
+  --accent: var(--magenta);
+  --accent-rgb: var(--magenta-rgb);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: min(620px, 100%);
+  padding: 14px 24px 15px;
+  background: linear-gradient(90deg, transparent, rgba(var(--magenta-rgb), 0.2) 30%, rgba(var(--magenta-rgb), 0.2) 70%, transparent);
+  border-top: 1px solid rgba(var(--magenta-rgb), 0.55);
+  border-bottom: 1px solid rgba(var(--magenta-rgb), 0.55);
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.victory__rankup.is-in {
+  animation: v-unfurl 560ms var(--ease-out) both;
+}
+
+.victory__rankup-tag {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  color: var(--magenta);
+}
+
+.victory__rankup-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 2.6vw, 32px);
+  letter-spacing: var(--tracking-display);
+  color: #ffe6fa;
+  text-shadow: 0 0 18px rgba(var(--magenta-rgb), 0.8), 0 0 44px rgba(var(--magenta-rgb), 0.35);
+}
+
+.victory__identity {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.victory__identity.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 300ms var(--ease-out), transform 360ms var(--ease-out);
+}
+
+.victory__identity .label {
+  color: var(--cyan);
+}
+
+.victory__callsign {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: var(--tracking-display);
+  color: #e6fdff;
+  text-shadow: 0 0 14px rgba(var(--cyan-rgb), 0.7);
+}
+
+/* ── stats + actions ────────────────────────────────────────────────── */
+
+.victory__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px 30px;
+  opacity: 0;
+}
+
+.victory__stats.is-in {
+  opacity: 1;
+  transition: opacity 360ms var(--ease-out);
+}
+
+.victory__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.victory__stat .mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.victory__stat--next {
+  align-items: center;
+}
+
+.victory__next {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.victory__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 4px;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.victory__actions.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 360ms var(--ease-out), transform 460ms var(--ease-back);
+}
+
+.victory__actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 240px;
+  justify-content: space-between;
+}
+
+.victory__play {
+  --accent: var(--magenta);
+  --accent-rgb: var(--magenta-rgb);
+}
+
+.victory__hub {
+  --accent: var(--cyan);
+  --accent-rgb: var(--cyan-rgb);
+}
+
+.victory__play-icon {
+  display: grid;
+  place-items: center;
+}
+
+.victory__btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.victory__cast {
+  font-size: 9px;
+  font-weight: 700;
+  color: inherit;
+  opacity: 0.72;
+}
+
+.victory__cast[data-state='rendering'],
+.victory__cast[data-state='queued'] {
+  animation: v-breathe 1.4s var(--ease-in-out) infinite alternate;
+}
+
+.victory__skip {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 300ms var(--ease-out);
+  animation: v-breathe 1.6s var(--ease-in-out) 1.2s infinite alternate backwards;
+}
+
+.victory__skip.is-hidden {
+  opacity: 0;
+  animation: none;
+}
+
+/* skipping: everything lands at once */
+.screen--victory.is-instant *,
+.screen--victory.is-instant *::before,
+.screen--victory.is-instant *::after {
+  animation-duration: 1ms !important;
+  animation-delay: 0ms !important;
+  transition-duration: 1ms !important;
+  transition-delay: 0ms !important;
+}
+
+.screen--victory.is-instant .victory__cast,
+.screen--victory.is-instant .victory__skip {
+  animation: none !important;
+}
+
+@media (max-height: 820px) {
+  .victory {
+    padding-top: clamp(14px, 3.5vh, 40px);
+  }
+
+  .victory__head {
+    gap: 10px;
+  }
+
+  .victory__title {
+    font-size: clamp(38px, 5.6vw, 72px);
+  }
+
+  .victory__panel .panel__head {
+    min-height: 36px;
+  }
+
+  .victory__panel .panel__body {
+    padding-top: 2px;
+    padding-bottom: 12px;
+  }
+
+  .reward {
+    padding: 5px 2px;
+  }
+
+  .reward--total {
+    padding-top: 9px;
+  }
+
+  .reward--total .reward__value {
+    font-size: 26px;
+  }
+
+  .victory__xp {
+    margin-top: 8px;
+    padding-top: 9px;
+  }
+
+  .victory__rankup {
+    padding: 9px 24px 10px;
+  }
+
+  .victory__rankup-name {
+    font-size: 24px;
+  }
+}
+
+/* ── keyframes ──────────────────────────────────────────────────────── */
+
+@keyframes v-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes v-chroma {
+  0% {
+    letter-spacing: 0.26em;
+    filter: blur(3px);
+    text-shadow:
+      -14px 0 rgba(var(--magenta-rgb), 0.9),
+      14px 0 rgba(var(--cyan-rgb), 0.9),
+      0 0 22px rgba(var(--acid-rgb), 0.3),
+      0 0 64px rgba(var(--acid-rgb), 0.1);
+  }
+  45% {
+    filter: blur(0);
+  }
+  100% {
+    letter-spacing: 0.07em;
+    filter: blur(0);
+    text-shadow:
+      -1px 0 rgba(var(--magenta-rgb), 0.5),
+      1px 0 rgba(var(--cyan-rgb), 0.5),
+      0 0 22px rgba(var(--acid-rgb), 0.6),
+      0 0 64px rgba(var(--acid-rgb), 0.28);
+  }
+}
+
+@keyframes v-slam {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--stamp-rot) - 9deg)) scale(2.7);
+    filter: blur(2px);
+  }
+  58% {
+    opacity: 1;
+    transform: rotate(calc(var(--stamp-rot) + 1deg)) scale(0.9);
+    filter: blur(0) brightness(1.9);
+  }
+  78% {
+    transform: rotate(var(--stamp-rot)) scale(1.05);
+    filter: brightness(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--stamp-rot)) scale(1);
+    filter: none;
+  }
+}
+
+@keyframes v-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+    filter: brightness(1.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes v-unfurl {
+  0% {
+    opacity: 0;
+    transform: scaleX(0) scaleY(0.4);
+  }
+  55% {
+    opacity: 1;
+    transform: scaleX(1.03) scaleY(1);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes v-breathe {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0.35;
+  }
+}

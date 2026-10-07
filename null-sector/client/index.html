@@ -1,0 +1,101 @@
+<!doctype html>
+<!--
+  NULL//SECTOR — browser client shell (docs/ARCHITECTURE.md §4.3).
+
+  Layers, back to front: #gl (WebGL2 world) · #fallback-bg (CSS skyline, only for body.no-webgl)
+  · #ui (screens; the Camera writes its transform) · #crt (scanlines/vignette) · #toasts
+  · #settings-root. The server replaces {{NS_TOKEN}} with the per-launch API token.
+
+  #preboot is a tiny self-contained loader painted before any stylesheet or module arrives,
+  so the window is never blank; main.js dismisses it once the boot screen is live. If the
+  client never boots (a module failed to load), the inline timer turns it into a diagnosis.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="ns-token" content="{{NS_TOKEN}}">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#05060a">
+  <meta name="description" content="NULL//SECTOR — a cyberpunk survival RPG that teaches Python, from zero to AI engineer.">
+  <title>NULL//SECTOR</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2300f0ff'/%3E%3Cstop offset='1' stop-color='%23ff2bd6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M14 2h48v48L50 62H2V14z' fill='%2305060a'/%3E%3Cpath d='M14 2h48v48L50 62H2V14z' fill='none' stroke='url(%23g)' stroke-width='3'/%3E%3Cpath d='M18 46V18l14 20V18M36 46l10-28M44 46l10-28' fill='none' stroke='url(%23g)' stroke-width='5' stroke-linecap='square'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/editor.css">
+  <link rel="stylesheet" href="/css/mission.css">
+  <link rel="stylesheet" href="/css/victory.css">
+  <link rel="stylesheet" href="/css/cutscene.css">
+
+  <style>
+    /* Pre-boot loader: inline so it paints on the very first frame, before any stylesheet. */
+    html, body { margin: 0; height: 100%; background: #05060a; }
+    #preboot {
+      position: fixed; inset: 0; z-index: 90; display: grid; place-items: center;
+      background: #05060a; color: #8892a6;
+      font: 600 11px/1.6 ui-monospace, 'Cascadia Code', Consolas, monospace; letter-spacing: .32em;
+      transition: opacity .35s cubic-bezier(.16, 1, .3, 1), visibility 0s linear .35s;
+    }
+    #preboot.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
+    .preboot__box { display: grid; gap: 14px; justify-items: center; }
+    .preboot__mark { color: #00f0ff; text-shadow: 0 0 10px rgba(0, 240, 255, .6); }
+    .preboot__bar { width: 168px; height: 2px; background: rgba(0, 240, 255, .12); overflow: hidden; }
+    .preboot__bar::after {
+      content: ''; display: block; width: 40%; height: 100%; background: #00f0ff;
+      box-shadow: 0 0 8px #00f0ff; animation: preboot-scan 1.1s cubic-bezier(.65, 0, .35, 1) infinite;
+    }
+    .preboot__fail { display: none; max-width: 34em; text-align: center; letter-spacing: .08em; color: #ffb000; }
+    #preboot.is-stuck .preboot__fail { display: block; }
+    #preboot.is-stuck .preboot__bar::after { background: #ffb000; box-shadow: 0 0 8px #ffb000; }
+    @keyframes preboot-scan { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+    @media (prefers-reduced-motion: reduce) { .preboot__bar::after { animation-duration: 3s; } }
+  </style>
+</head>
+<body>
+  <div id="preboot" role="status" aria-live="polite">
+    <div class="preboot__box">
+      <div class="preboot__mark">NULL//SECTOR</div>
+      <div class="preboot__bar"></div>
+      <div>ESTABLISHING LINK</div>
+      <div class="preboot__fail">The client did not start. Make sure the game server is running
+        (<b>python game.py</b>), then reload. Terminal mode: <b>python game.py tui</b></div>
+    </div>
+  </div>
+
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div id="fallback-bg" aria-hidden="true">
+    <div class="fb-core"></div>
+    <div class="fb-far"></div>
+    <div class="fb-near"></div>
+    <div class="fb-water"></div>
+    <div class="fb-rain"></div>
+  </div>
+  <div id="ui">
+    <div id="screens"></div>
+  </div>
+  <div id="crt" aria-hidden="true"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="settings-root"></div>
+
+  <noscript>
+    <p style="position:fixed;inset:auto 0 40px;text-align:center;color:#ffb000;font:14px monospace;z-index:100">
+      NULL//SECTOR needs JavaScript. Terminal mode: python game.py tui</p>
+  </noscript>
+
+  <script>
+    // If main.js never signals readiness (window.__nsBooted), explain instead of spinning forever.
+    setTimeout(function () {
+      if (!window.__nsBooted) {
+        var el = document.getElementById('preboot');
+        if (el) el.classList.add('is-stuck');
+      }
+    }, 9000);
+  </script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

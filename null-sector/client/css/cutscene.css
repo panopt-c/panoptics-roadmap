@@ -1,0 +1,456 @@
+/*
+ * Cutscene screen — the transmission (docs/ARCHITECTURE.md §6).
+ *
+ * The world canvas is the set; this stylesheet adds the film language on top: 2.39:1
+ * letterbox bars (height derived from the viewport, eased in with `.is-rolling`), a slow
+ * light leak, a vignette, a HUD inside the bars (REC + timecode, source, skip hint), the
+ * title card, subtitles centred in the lower bar, and media layers that cross-fade in with
+ * a Ken Burns move parameterised per layer (--kb-* set by cutscene.js).
+ * Narrative colour is magenta/violet, per the bible.
+ */
+
+.screen.screen--cutscene {
+  --bar: max(0px, calc((100vh - 100vw / 2.39) / 2));
+  --magenta-rgb: 255, 43, 214;
+  --violet-rgb: 140, 77, 255;
+  --accent: var(--magenta);
+  --accent-rgb: var(--magenta-rgb);
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  cursor: default;
+  user-select: none;
+}
+
+/* ── media ──────────────────────────────────────────────────────────── */
+
+.cs-media {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.cs-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1800ms var(--ease-in-out);
+}
+
+.cs-layer.is-in {
+  opacity: 1;
+}
+
+.cs-layer__media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  animation: cs-kenburns 32s cubic-bezier(0.45, 0.05, 0.55, 0.95) both;
+}
+
+/* ── atmosphere ─────────────────────────────────────────────────────── */
+
+.cs-leak {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(ellipse 36% 54% at 18% 46%, rgba(var(--magenta-rgb), 0.12), transparent 70%),
+    radial-gradient(ellipse 30% 46% at 82% 38%, rgba(var(--violet-rgb), 0.1), transparent 70%);
+  animation: cs-leak 22s var(--ease-in-out) infinite alternate;
+  will-change: transform;
+}
+
+.cs-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 75% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(to bottom, transparent 62%, rgba(0, 0, 0, 0.35));
+}
+
+/* ── letterbox ──────────────────────────────────────────────────────── */
+
+.cs-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: var(--bar);
+  background: #000;
+  transform: scaleY(0);
+  transition: transform 900ms var(--ease-in-out);
+}
+
+.cs-bar--top {
+  top: 0;
+  transform-origin: 50% 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.cs-bar--bottom {
+  bottom: 0;
+  transform-origin: 50% 100%;
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.screen--cutscene.is-rolling .cs-bar {
+  transform: scaleY(1);
+}
+
+/* ── HUD inside the bars ────────────────────────────────────────────── */
+
+.cs-hud {
+  position: absolute;
+  left: clamp(20px, 3vw, 44px);
+  right: clamp(20px, 3vw, 44px);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out) 700ms;
+  pointer-events: none;
+}
+
+.cs-hud--top {
+  top: max(18px, calc(var(--bar) / 2));
+  transform: translateY(-50%);
+}
+
+.cs-hud--bottom {
+  bottom: 14px;
+}
+
+.screen--cutscene.is-rolling .cs-hud {
+  opacity: 1;
+}
+
+.cs-hud__rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: var(--tracking-label);
+  color: rgba(var(--magenta-rgb), 0.9);
+}
+
+.cs-hud__rec i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--magenta);
+  box-shadow: 0 0 10px var(--magenta);
+  animation: cs-rec 1.4s steps(2, jump-none) infinite;
+}
+
+.cs-hud__tc {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(215, 221, 232, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-hud__src {
+  color: rgba(136, 146, 166, 0.7);
+}
+
+.cs-skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 600ms var(--ease-out);
+}
+
+.cs-skip.is-in {
+  opacity: 0.75;
+}
+
+/* ── title card ─────────────────────────────────────────────────────── */
+
+.cs-title {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.cs-title.is-in {
+  opacity: 1;
+  transition: opacity 900ms var(--ease-out);
+}
+
+.cs-title.is-out {
+  opacity: 0;
+  filter: blur(6px);
+  transform: scale(1.03);
+  transition: opacity 650ms var(--ease-in-out), filter 650ms var(--ease-in-out), transform 650ms var(--ease-in-out);
+}
+
+.cs-title__kicker {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.4em;
+  color: var(--magenta);
+  text-shadow: 0 0 12px rgba(var(--magenta-rgb), 0.6);
+}
+
+.cs-title__rule {
+  width: clamp(40px, 7vw, 110px);
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(var(--magenta-rgb), 0.8));
+}
+
+.cs-title__rule:last-child {
+  background: linear-gradient(to left, transparent, rgba(var(--magenta-rgb), 0.8));
+}
+
+.cs-title__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(34px, 5.4vw, 84px);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #f7ecff;
+  text-shadow:
+    0 0 20px rgba(var(--violet-rgb), 0.7),
+    0 0 60px rgba(var(--magenta-rgb), 0.3);
+}
+
+.cs-title.is-in .cs-title__name {
+  animation: cs-title-breathe 3s var(--ease-out) both;
+}
+
+.cs-title__meta {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: rgba(136, 146, 166, 0.85);
+}
+
+/* ── subtitles (centred in the lower bar) ───────────────────────────── */
+
+.cs-subs {
+  position: absolute;
+  left: 50%;
+  bottom: max(64px, calc(var(--bar) / 2));
+  z-index: 5;
+  width: min(1000px, 86vw);
+  transform: translate(-50%, 50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.cs-line {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(16px, 1.45vw, 21px);
+  line-height: 1.5;
+  letter-spacing: 0.035em;
+  color: #eceff5;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 16px rgba(0, 0, 0, 0.75);
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.cs-line.is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 380ms var(--ease-out), transform 480ms var(--ease-out);
+}
+
+.cs-line.is-out {
+  opacity: 0;
+  filter: blur(3px);
+  transition: opacity 420ms var(--ease-in-out), filter 420ms var(--ease-in-out);
+}
+
+.cs-line::after {
+  content: '';
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 3px;
+  vertical-align: -0.16em;
+  background: rgba(var(--magenta-rgb), 0.85);
+  box-shadow: 0 0 10px rgba(var(--magenta-rgb), 0.7);
+  animation: cs-caret 0.9s steps(2, jump-none) infinite;
+}
+
+.cs-line.is-out::after {
+  display: none;
+}
+
+/* ── render indicator ───────────────────────────────────────────────── */
+
+.cs-status {
+  position: absolute;
+  top: calc(var(--bar) + 18px);
+  right: clamp(20px, 3vw, 44px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px 9px 12px;
+  background: rgba(8, 6, 14, 0.62);
+  border: 1px solid rgba(var(--violet-rgb), 0.35);
+  -webkit-backdrop-filter: blur(var(--blur));
+  backdrop-filter: blur(var(--blur));
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 360ms var(--ease-out), transform 360ms var(--ease-out);
+  pointer-events: none;
+}
+
+.cs-status[hidden] {
+  display: none;
+}
+
+.cs-status.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.cs-status__ring {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 25%, rgba(var(--magenta-rgb), 0.95));
+  -webkit-mask: radial-gradient(closest-side, transparent 64%, #000 68%);
+  mask: radial-gradient(closest-side, transparent 64%, #000 68%);
+  animation: cs-spin 0.9s linear infinite;
+}
+
+.cs-status__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cs-status__label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: var(--tracking-label);
+  color: #eadcff;
+}
+
+.cs-status__stage {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: rgba(var(--magenta-rgb), 0.85);
+}
+
+.cs-status[data-state='failed'] {
+  border-color: rgba(255, 176, 0, 0.45);
+}
+
+.cs-status[data-state='failed'] .cs-status__ring {
+  animation: none;
+  background: rgba(255, 176, 0, 0.9);
+}
+
+/* ── ending ─────────────────────────────────────────────────────────── */
+
+.screen--cutscene.is-ending .cs-media,
+.screen--cutscene.is-ending .cs-title,
+.screen--cutscene.is-ending .cs-subs,
+.screen--cutscene.is-ending .cs-status,
+.screen--cutscene.is-ending .cs-hud {
+  opacity: 0;
+  transition: opacity 600ms var(--ease-in-out);
+}
+
+/* ── keyframes ──────────────────────────────────────────────────────── */
+
+@keyframes cs-kenburns {
+  from {
+    transform: translate(var(--kb-x0, 0%), var(--kb-y0, 0%)) scale(var(--kb-s0, 1.06));
+  }
+  to {
+    transform: translate(var(--kb-x1, 0%), var(--kb-y1, 0%)) scale(var(--kb-s1, 1.18));
+  }
+}
+
+@keyframes cs-leak {
+  from {
+    transform: translate(-4%, 1%) rotate(-2deg);
+    opacity: 0.7;
+  }
+  to {
+    transform: translate(5%, -2%) rotate(2deg);
+    opacity: 1;
+  }
+}
+
+@keyframes cs-title-breathe {
+  from {
+    letter-spacing: 0.34em;
+  }
+  to {
+    letter-spacing: 0.14em;
+  }
+}
+
+@keyframes cs-rec {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+
+@keyframes cs-caret {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes cs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* reduced motion: the OS preference or the in-game setting (main.js → body.reduce-motion) */
+body.reduce-motion .cs-layer__media,
+body.reduce-motion .cs-leak,
+body.reduce-motion .cs-title.is-in .cs-title__name {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-layer__media,
+  .cs-leak,
+  .cs-title.is-in .cs-title__name {
+    animation: none;
+  }
+}
