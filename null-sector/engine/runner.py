@@ -38,25 +38,26 @@ class HackReport:
         return next((c for c in self.checks if not c["passed"]), None)
 
 
-def mission_path(mission: Mission) -> Path:
-    return MISSIONS_DIR / mission.filename
+def mission_path(mission: Mission, missions_dir: Path | None = None) -> Path:
+    return (missions_dir or MISSIONS_DIR) / mission.filename
 
 
-def ensure_mission_file(mission: Mission, reset: bool = False) -> Path:
+def ensure_mission_file(mission: Mission, reset: bool = False, missions_dir: Path | None = None) -> Path:
     """Drop the starter file into missions/ — never overwriting your work unless asked."""
-    path = mission_path(mission)
+    path = mission_path(mission, missions_dir)
     if reset or not path.exists():
-        MISSIONS_DIR.mkdir(exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(mission.starter.lstrip("\n"), encoding="utf-8")
     return path
 
 
-def hack(mission: Mission) -> HackReport:
-    path = ensure_mission_file(mission)
+def hack(mission: Mission, missions_dir: Path | None = None) -> HackReport:
+    path = ensure_mission_file(mission, missions_dir=missions_dir)
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "report.json"
         env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
         try:
+            # cwd is the code root (where `engine` and `levels` live), wherever the player's files are.
             proc = subprocess.run(
                 [sys.executable, "-m", "engine.harness", mission.slug, str(path), str(out)],
                 cwd=GAME_DIR, env=env, stdin=subprocess.DEVNULL,
