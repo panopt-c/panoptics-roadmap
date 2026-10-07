@@ -99,8 +99,7 @@ canvas {
 input,
 textarea,
 [contenteditable],
-.rich,
-.selectable {
+.rich {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -351,6 +350,12 @@ body.no-webgl #fallback-bg {
 .screen.is-active .rise {
   animation: rise 640ms var(--ease-out) backwards;
   animation-delay: calc(70ms + var(--i, 0) * 75ms);
+}
+
+/* Same idea for one-shot reactions on staged elements: the entrance stays listed. */
+.screen.is-active .rise.is-denied {
+  animation: rise 640ms var(--ease-out) backwards, deny-shake 380ms var(--ease-out);
+  animation-delay: calc(70ms + var(--i, 0) * 75ms), 0s;
 }
 
 @keyframes rise {
@@ -2603,8 +2608,11 @@ body.no-webgl #fallback-bg {
   from { opacity: 0; transform: scale(0.2); }
 }
 
-.map-node.is-unlocking .map-node__hex {
-  animation: node-unlock 900ms var(--ease-back);
+/* Keep node-in in the list: dropping a still-listed animation never restarts it, so the node
+   doesn't re-pop when is-unlocking is removed. */
+.screen.is-active .map-node.is-unlocking .map-node__hex {
+  animation: node-in 520ms var(--ease-back) backwards, node-unlock 900ms var(--ease-back);
+  animation-delay: calc(260ms + var(--n) * 32ms), 0s;
 }
 
 .map-node.is-unlocking .map-node__burst {

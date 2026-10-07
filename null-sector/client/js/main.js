@@ -36,6 +36,7 @@ const HOVER_SFX_GAP_MS = 45;
 const FAULT_TOAST_GAP_MS = 4000;
 const BANNER_DELAY_MS = 1200; // a drop that heals faster than this never shows the banner
 const MAX_TOASTS = 4;
+const TOAST_OUT_MS = 260; // .toast.is-leaving animation
 const SFX_SELECTOR = '.btn, .icon-btn, [data-sfx]';
 const EMPTY = Object.freeze({});
 
@@ -439,10 +440,7 @@ function toast(message, { kind = 'info', ms = 3200, title } = {}) {
     record.leaving = true;
     liveToasts.splice(liveToasts.indexOf(record), 1);
     el.classList.add('is-leaving');
-    // animationend never fires when animations are off; the timer is the backstop.
-    const done = () => el.remove();
-    el.addEventListener('animationend', (e) => e.target === el && done(), { once: false });
-    setTimeout(done, 420);
+    setTimeout(() => el.remove(), TOAST_OUT_MS); // a timer, not animationend: works with animations off
   };
   record.restart = (nextMs) => {
     el.style.setProperty('--ms', `${Math.max(800, nextMs)}ms`);
@@ -456,7 +454,7 @@ function toast(message, { kind = 'info', ms = 3200, title } = {}) {
 
   liveToasts.push(record);
   toastRoot.append(el);
-  while (liveToasts.length > MAX_TOASTS) liveToasts.find((t) => !t.leaving)?.handle.close();
+  while (liveToasts.length > MAX_TOASTS) liveToasts[0].handle.close(); // leaving toasts are already out of the list
   return record.handle;
 }
 

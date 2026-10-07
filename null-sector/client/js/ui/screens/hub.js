@@ -797,7 +797,7 @@ export class HubScreen {
     this.#renderGallery(state);
     return h(
       'section',
-      { class: 'panel hub-gallery rise', style: '--i: 4; --accent: var(--magenta); --accent-rgb: 255, 43, 214', 'aria-label': 'Memory fragments' },
+      { class: 'panel hub-gallery rise', style: '--i: 4', 'aria-label': 'Memory fragments' },
       h('div', { class: 'panel__head' }, h('span', { class: 'panel__title' }, 'Memory fragments'), r.galleryCount),
       h('div', { class: 'panel__body hub-gallery__body scroll' }, r.galleryList),
     );
