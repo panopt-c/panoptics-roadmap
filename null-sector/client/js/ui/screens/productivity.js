@@ -170,7 +170,7 @@ export function describeActivity(activity) {
   }
 }
 
-const itemName = (item) => String(item?.name ?? item?.title ?? item?.item ?? item?.id ?? 'Unknown item');
+const itemName = (item) => String(item?.name ?? item?.title ?? item?.metadata?.name ?? item?.item_key ?? item?.item ?? item?.id ?? 'Unknown item').replaceAll('_', ' ');
 const itemQty = (item) => num(item?.quantity ?? item?.qty ?? item?.count, 1);
 const milestoneDone = (m) => Boolean(m?.achieved ?? m?.unlocked ?? m?.completed ?? m?.earned ?? m?.achieved_at ?? m?.unlocked_at);
 const safeRarity = (r) => (/^[a-z_-]{1,24}$/i.test(String(r ?? '')) ? String(r).toLowerCase() : 'common');
@@ -696,7 +696,8 @@ export class ProductivityScreen {
     r.remaining.classList.toggle('is-done', num(remaining) <= 0);
     const streak = num(study.current_streak_days);
     r.streak.textContent = `${streak} ${streak === 1 ? 'day' : 'days'}`;
-    r.best.textContent = `${num(study.best_streak_days)} days`;
+    const bestStreak = num(study.best_streak_days);
+    r.best.textContent = `${bestStreak} ${bestStreak === 1 ? 'day' : 'days'}`;
     r.totalStudy.textContent = formatMinutes(study.total_minutes);
     r.streakChip.className = `chip ${streak > 0 ? 'chip--ok' : ''}`;
     r.streakChip.textContent = streak > 0 ? `Streak ${streak}d` : 'No streak';
@@ -718,9 +719,10 @@ export class ProductivityScreen {
       r.toGo.textContent = 'Log a weigh-in to start';
       r.toGo.className = 'ops-weight__togo';
     } else {
-      const gap = num(latest) - target;
-      r.toGo.textContent = gap <= 0 ? 'Target reached' : `${gap.toFixed(1)} lb to go`;
-      r.toGo.className = `ops-weight__togo ${gap <= 0 ? 'is-done' : ''}`;
+      const gap = Math.abs(num(latest) - target);
+      const reached = gap === 0 || (hasProgress && Number(wp) >= 1);
+      r.toGo.textContent = reached ? 'Target reached' : `${gap.toFixed(1)} lb to go`;
+      r.toGo.className = `ops-weight__togo ${reached ? 'is-done' : ''}`;
     }
     this.#renderChart(fitness.weight_history, target);
 
@@ -728,7 +730,7 @@ export class ProductivityScreen {
     this.#renderMilestones(snap.milestones);
     this.#renderHabits(snap.habits);
     this.#renderFeed(snap.recent_activity);
-    this.#renderJobs(snap.cinematic_jobs);
+    this.#renderJobs(snap.cinematic_jobs, snap.milestones);
   }
 
   #renderXp(game) {
@@ -814,12 +816,12 @@ export class ProductivityScreen {
   }
 
   #renderInventory(inventory) {
-    const items = toList(inventory);
+    const items = toList(inventory).map(item => ({ ...item.metadata, ...item }));
     const r = this.#r;
     const total = items.reduce((sum, it) => sum + itemQty(it), 0);
     r.itemCount.textContent = `${total} ${total === 1 ? 'item' : 'items'}`;
     if (!items.length) {
-      r.inventory.replaceChildren(h('li', { class: 'ops-empty' }, 'Empty. Logging study and training earns gear.'));
+      r.inventory.replaceChildren(h('li', { class: 'ops-empty' }, 'No items in your inventory yet.'));
       return;
     }
     r.inventory.replaceChildren(
@@ -874,15 +876,18 @@ export class ProductivityScreen {
     }
     r.habits.replaceChildren(
       ...list.map((hb) => {
+        const measured = typeof hb.value === 'number' && Number.isFinite(hb.value);
         const done = Boolean(hb.done_today ?? hb.completed_today ?? hb.done ?? hb.completed ?? (typeof hb.value === 'boolean' ? hb.value : false));
         const streak = hb.streak ?? hb.current_streak_days ?? hb.streak_days;
+        const unit = hb.habit_key?.endsWith('_minutes') ? ' min' : hb.habit_key === 'weight_lbs' ? ' lb' : '';
         return h(
           'li',
           { class: `ops-habit ${done ? 'is-done' : ''}` },
-          h('span', { class: 'ops-habit__mark', 'aria-hidden': 'true' }, done ? '■' : '□'),
-          h('span', { class: 'ops-habit__name' }, String(hb.title ?? hb.name ?? 'Protocol').replaceAll('_', ' ')),
+          h('span', { class: 'ops-habit__mark', 'aria-hidden': 'true' }, measured ? '•' : done ? '■' : '□'),
+          h('span', { class: 'ops-habit__name' }, String(hb.title ?? hb.name ?? hb.habit_key ?? 'Protocol').replaceAll('_', ' ')),
+          measured ? h('span', { class: 'ops-habit__streak mono' }, `${hb.value}${unit}`) : null,
           streak !== undefined && streak !== null ? h('span', { class: 'ops-habit__streak mono' }, `${num(streak)}d`) : null,
-          h('span', { class: 'visually-hidden' }, done ? 'done today' : 'not done today'),
+          h('span', { class: 'visually-hidden' }, measured ? 'recorded today' : done ? 'done today' : 'not done today'),
         );
       }),
     );
@@ -910,18 +915,20 @@ export class ProductivityScreen {
     );
   }
 
-  #renderJobs(jobs) {
+  #renderJobs(jobs, milestones) {
     const list = toList(jobs);
     const r = this.#r;
     r.jobsWrap.hidden = list.length === 0;
     r.jobs.replaceChildren(
       ...list.slice(0, 6).map((job) => {
-        const state = String(job.state ?? job.status ?? 'queued').toLowerCase();
+        const localPayload = job.schema_version === 'neon.cinematic.v1';
+        const milestone = toList(milestones).find(item => item.id === job.reward?.milestone_id);
+        const state = String(job.state ?? job.status ?? (localPayload ? 'ready for export' : 'queued')).toLowerCase();
         const tone = state === 'done' || state === 'completed' ? 'chip--ok' : state === 'failed' ? 'chip--bad' : state === 'offline' ? '' : 'chip--warn';
         return h(
           'li',
           { class: 'ops-job' },
-          h('span', { class: 'ops-job__name' }, String(job.title ?? job.milestone ?? job.kind ?? job.id ?? 'Reward')),
+          h('span', { class: 'ops-job__name' }, String(job.title ?? milestone?.title ?? job.milestone ?? job.reward?.category ?? job.kind ?? job.id ?? 'Reward')),
           h('span', { class: `chip ${tone}` }, state),
         );
       }),

@@ -3,11 +3,23 @@
 The SQLite backend is integrated into the existing NULL//SECTOR game. The source
 checkout was obtained from `panopt-c/panoptics-roadmap`, branch
 `claude/keen-mayer-xso05z`, at `0134663`. Integration changes are local to this
-checkout; they have not been pushed to Claude's cloud environment.
+checkout; they have not been pushed to Claude's cloud environment. Claude's
+browser command center commit `5f9e7cc` has been merged locally and tested against
+this backend.
 
 ## Launch
 
 From `null-sector` in PowerShell on this computer:
+
+```powershell
+.\run.ps1
+```
+
+In the browser hub, choose **Command center** or press **O**. Study, workout and
+weight forms save to SQLite, and the dashboard updates through the local event
+stream. The six-hour math target and 170 lb weight target work in both frontends.
+
+For the terminal command center:
 
 ```powershell
 .\run.ps1 productivity
@@ -88,8 +100,10 @@ null activity. Invalid payloads return HTTP 400. The direct Python API is
 `GameSession.productivity_snapshot()` and `GameSession.log_productivity(command,
 payload)`. Both HTTP and Rich TUI handlers call these same methods.
 
-New browser dashboard components can consume these endpoints; this change adds
-the API and the terminal command center, not a new browser screen.
+The integrated browser and Rich terminal command centers both consume this
+contract. Browser inventory reads `item_key` and optional metadata; protocols
+show stored numeric habit values; reward cards label local payloads as ready for
+export. Weight progress handles both gain and loss from the logged baseline.
 
 ## Cinematic payloads
 
