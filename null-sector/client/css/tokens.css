@@ -1,0 +1,59 @@
+/* Design tokens — the art bible in code (docs/ARCHITECTURE.md §6). */
+:root {
+  /* palette */
+  --void: #05060a;
+  --deep: #0a0d14;
+  --panel: rgba(10, 14, 22, 0.62);
+  --panel-solid: #0b0f18;
+  --panel-hi: rgba(18, 24, 36, 0.78);
+  --cyan: #00f0ff;
+  --magenta: #ff2bd6;
+  --acid: #39ff14;
+  --amber: #ffb000;
+  --blood: #ff3355;
+  --steel: #8892a6;
+  --text: #d7dde8;
+  --dim: #4a5160;
+  --hairline: rgba(0, 240, 255, 0.35);
+
+  /* active accent — screens override per context (sector colour, danger, success) */
+  --accent: var(--cyan);
+  --accent-rgb: 0, 240, 255;
+
+  /* type */
+  --font-display: 'Chakra Petch', 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  --tracking-label: 0.18em;
+  --tracking-display: 0.12em;
+
+  /* shape */
+  --chamfer: 14px;
+  --chamfer-sm: 8px;
+  --radius: 2px;
+  --blur: 14px;
+
+  /* glow */
+  --glow-sm: 0 0 6px rgba(var(--accent-rgb), 0.55);
+  --glow-md: 0 0 14px rgba(var(--accent-rgb), 0.45), 0 0 2px rgba(var(--accent-rgb), 0.9);
+  --text-glow: 0 0 8px rgba(var(--accent-rgb), 0.65), 0 0 22px rgba(var(--accent-rgb), 0.25);
+
+  /* motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 140ms;
+  --t-med: 220ms;
+  --t-slow: 420ms;
+
+  /* layout */
+  --gutter: clamp(12px, 1.6vw, 24px);
+  --topbar-h: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0ms;
+    --t-med: 0ms;
+    --t-slow: 0ms;
+  }
+}
