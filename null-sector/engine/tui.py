@@ -44,8 +44,11 @@ class Game:
             online, reason = self.director.status()
             feed = "[ok]● ONLINE[/]" if online else f"[muted]○ OFFLINE · {reason}[/]"
             self.console.print(f"  [muted]HIGGSFIELD FEED[/]  {feed}\n")
-            self.console.print(ui.command_bar(("D", "DEPLOY"), ("G", "GALLERY"), ("Q", "JACK OUT")))
-            key = ui.ask_key(self.console, "dgq", default="d")
+            self.console.print(ui.command_bar(("D", "DEPLOY"), ("P", "PRODUCTIVITY"), ("G", "GALLERY"), ("Q", "JACK OUT")))
+            key = ui.ask_key(self.console, "dpgq", default="d")
+            if key == "p":
+                from engine.productivity.tui import show_command_center
+                show_command_center(self.console, self.session)
             if key == "q":
                 self.console.print("\n  [pink]Jacking out. Progress saved.[/]\n")
                 return
@@ -175,6 +178,10 @@ def run(command: str = "tui", fast: bool = False, session: GameSession | None = 
     """Entry point for the terminal commands: tui | hack | watch | reset."""
     game = Game(fast=fast, session=session)
     try:
+        if command == "productivity":
+            from engine.productivity.tui import show_command_center
+            show_command_center(game.console, game.session)
+            return
         if command in ("tui", "play"):
             game.main_menu()
             return

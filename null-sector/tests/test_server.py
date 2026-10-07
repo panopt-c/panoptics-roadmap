@@ -135,7 +135,7 @@ class ServerTestCase(SandboxTestCase):
         for rel, (content, _ctype) in STATIC.items():
             path = self.client_dir / rel
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            path.write_text(content, encoding="utf-8", newline="")
         (self.root / "secret.txt").write_text(SECRET, encoding="utf-8")
         self.server = create_server(self.session, port=0, client_dir=self.client_dir)
         self.server.start_background()
@@ -246,7 +246,6 @@ class SecurityTests(ServerTestCase):
         self.assertFalse(any(k.lower().startswith("access-control-") for k in resp.headers.keys()))
 
     def test_path_traversal_is_blocked(self):
-        os.symlink(self.root / "secret.txt", self.client_dir / "js" / "link.js")
         (self.client_dir / ".env").write_text(SECRET, encoding="utf-8")
         attempts = ["/../secret.txt", "/js/../../secret.txt", "/%2e%2e/secret.txt", "/js/%2e%2e/%2e%2e/secret.txt",
                     "/js/..%2f..%2fsecret.txt", "/js/..%5c..%5csecret.txt", "/js/link.js", "/.env", "/js/%00.js",
@@ -258,6 +257,17 @@ class SecurityTests(ServerTestCase):
                 self.assertIn(resp.status, (403, 404))
                 self.assertNotIn(SECRET.encode(), resp.body)
                 self.assertNotIn(b'"xp"', resp.body)
+
+    def test_symlink_traversal_is_blocked(self):
+        try:
+            os.symlink(self.root / "secret.txt", self.client_dir / "js" / "link.js")
+        except OSError as exc:
+            if getattr(exc, "winerror", None) == 1314:
+                self.skipTest("Windows account does not have symlink creation privilege")
+            raise
+        response = self.request("GET", "/js/link.js", token=None)
+        self.assertIn(response.status, (403, 404))
+        self.assertNotIn(SECRET.encode(), response.body)
 
     def test_cutscene_route_only_serves_media(self):
         self.paths.cutscene_dir.mkdir()
@@ -534,6 +544,7 @@ class LifecycleTests(SandboxTestCase):
         self.assertIn(f"localhost:{server.port}", server.allowed_hosts)
         self.assertEqual(server.url, f"http://127.0.0.1:{server.port}/")
 
+    @unittest.skipIf(os.name == "nt", "Popen SIGINT delivery requires POSIX; server.close is tested on Windows")
     def test_serve_shuts_down_cleanly_on_ctrl_c(self):
         script = textwrap.dedent(f"""
             import sys

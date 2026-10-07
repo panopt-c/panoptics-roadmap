@@ -420,6 +420,9 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     ROUTES = (
         ("GET", re.compile(r"/api/state"), "api_state"),
+        ("GET", re.compile(r"/api/productivity"), "api_productivity"),
+        ("GET", re.compile(r"/api/productivity/rewards"), "api_productivity_rewards"),
+        ("POST", re.compile(r"/api/productivity/(?P<command>study|workout|weight|habit)"), "api_log_productivity"),
         ("GET", re.compile(r"/api/events"), "api_events"),
         ("GET", re.compile(rf"/api/missions/{MISSION_ID}"), "api_mission"),
         ("POST", re.compile(rf"/api/missions/{MISSION_ID}/deploy"), "api_deploy"),
@@ -509,6 +512,17 @@ class RequestHandler(BaseHTTPRequestHandler):
     # ── API endpoints ───────────────────────────────────────
     def api_state(self) -> None:
         self._json(200, self.server.session.snapshot())
+
+    def api_productivity(self) -> None:
+        self._json(200, self.server.session.productivity_snapshot())
+
+    def api_productivity_rewards(self) -> None:
+        self._json(200, self.server.session.productivity_snapshot()["cinematic_jobs"])
+
+    def api_log_productivity(self, command: str) -> None:
+        result = self.server.session.log_productivity(command, self._read_json())
+        self._json(200, result)
+        self.server.broker.publish("productivity", result["snapshot"])
 
     def api_mission(self, mission_id: str) -> None:
         self._json(200, self.server.session.mission(mission_id))

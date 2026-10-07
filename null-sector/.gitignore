@@ -5,3 +5,7 @@ save.json
 cutscenes/*
 !cutscenes/.gitkeep
 __pycache__/
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

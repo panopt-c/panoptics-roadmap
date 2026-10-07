@@ -28,7 +28,7 @@ try:
 except ImportError:
     sys.exit("Missing libraries. Run:  pip install -r requirements.txt")
 
-TERMINAL_COMMANDS = ("tui", "hack", "watch", "reset")
+TERMINAL_COMMANDS = ("tui", "hack", "watch", "reset", "productivity")
 
 
 def play_web(port: int, open_browser: bool) -> None:
@@ -72,7 +72,7 @@ def play_web(port: int, open_browser: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="NULL//SECTOR — a Python survival RPG")
     parser.add_argument("command", nargs="?", choices=["play", *TERMINAL_COMMANDS], default="play",
-                        help="play (web client, default) | tui | hack | watch | reset")
+                        help="play (web client, default) | tui | hack | watch | reset | productivity")
     parser.add_argument("--port", type=int, default=7777, help="web client port (default 7777)")
     parser.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
     parser.add_argument("--fast", action="store_true", help="skip terminal animations")

@@ -109,6 +109,28 @@ class GameSession:
                             for e, kind in ((e, entry_kind(e)) for e in self.save.gallery)],
             }
 
+    def productivity_snapshot(self, on_date=None) -> dict:
+        """SQLite command center state, separate from the stable campaign API."""
+        from engine.productivity.integration import snapshot
+
+        with self._lock:
+            try:
+                return snapshot(self.paths, self.save, on_date)
+            except ValueError as exc:
+                raise SessionError(400, str(exc)) from exc
+
+    def log_productivity(self, command: str, payload: dict) -> dict:
+        """Shared write path for HTTP handlers and the terminal command center."""
+        from engine.productivity.integration import execute
+
+        if not isinstance(payload, dict):
+            raise SessionError(400, "activity payload must be a JSON object")
+        with self._lock:
+            try:
+                return execute(self.paths, self.save, command, payload)
+            except (ValueError, TypeError) as exc:
+                raise SessionError(400, str(exc)) from exc
+
     def mission(self, mission_id: str) -> dict:
         """The `Mission` payload. Read-only: never creates files or starts the timer."""
         with self._lock:
