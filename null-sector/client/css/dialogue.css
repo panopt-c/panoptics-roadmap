@@ -1,1 +1,24 @@
-/* dialogue — see docs/GAME_DESIGN.md §8 / §11. */
+/* Story dialogue sits in the browser's top layer, above the animated game. */
+.dialogue {
+  box-sizing: border-box;
+  width: min(660px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 28px;
+  color: #e6f6fa;
+  background: #0a1420;
+  border: 1px solid #00f0ff;
+  box-shadow: 0 0 44px #00f0ff22;
+  font: 16px/1.65 'JetBrains Mono', monospace;
+}
+.dialogue::backdrop { background: #030710c9; }
+.dialogue__label { color: #8299a9; font-size: 11px; letter-spacing: .16em; }
+.dialogue__speaker { margin: 12px 0; color: #00f0ff; font: 700 26px 'Chakra Petch', sans-serif; }
+.dialogue__text { margin: 16px 0 28px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dialogue__controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.dialogue__count { margin-right: auto; color: #8299a9; font-size: 12px; }
+.dialogue button:focus-visible { outline: 2px solid #ffb000; outline-offset: 4px; }
+@media (max-width: 480px) {
+  .dialogue { padding: 20px; font-size: 14px; }
+  .dialogue__controls .btn { min-height: 44px; }
+}

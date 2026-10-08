@@ -25,6 +25,7 @@ Filesystem locations come from an injectable `Paths`; tests run in a temp dir.
 """
 from __future__ import annotations
 
+import copy
 import threading
 import unicodedata
 from dataclasses import dataclass
@@ -287,6 +288,10 @@ class GameSession:
         return {
             "id": mission.id, "title": mission.title, "concept": mission.concept,
             "tier": sector.tier, "sector": {"name": sector.name, "zone": sector.zone, "color": sector.color},
+            # `tier` remains the legacy zero-based sector index. Content uses
+            # a one-based difficulty tier, exposed separately for new clients.
+            "difficulty_tier": mission.tier, "concepts": list(mission.concepts), "boss": mission.boss,
+            "dialogue": copy.deepcopy(mission.dialogue),
             "enemy": mission.enemy, "enemy_art": mission.enemy_art, "xp": mission.xp,
             "par_seconds": mission.par_seconds,
             "briefing_html": render_markdown(mission.briefing),
