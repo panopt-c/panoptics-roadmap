@@ -46,6 +46,33 @@ export class ApiError extends Error {
 
 const segment = (id) => encodeURIComponent(String(id));
 
+// ── productivity snapshot days ──────────────────────────────────────────────
+// The server's default `on_date` is its OS calendar day; the browser runs on the same machine,
+// so the local calendar here is the same "today". A snapshot is a dashboard *for* `snap.date`.
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/** Today in the local calendar, as YYYY-MM-DD. */
+export function localDay(now = new Date()) {
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+}
+
+/** The YYYY-MM-DD a productivity snapshot describes, or '' when it does not say. */
+export function snapshotDay(snap) {
+  const day = snap && typeof snap === 'object' ? snap.date : '';
+  return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : '';
+}
+
+/**
+ * True when `next` describes an earlier day than `shown` (the snapshot on screen). A backdated
+ * log once answered (and broadcast) the backdated day's dashboard; it must never replace today's.
+ */
+export function isEarlierDay(next, shown) {
+  const a = snapshotDay(next);
+  const b = snapshotDay(shown);
+  return !!a && !!b && a < b;
+}
+
 export class Api {
   #token;
   #base;
@@ -79,6 +106,7 @@ export class Api {
     return this.#request('POST', `/api/missions/${segment(id)}/hack`, { timeout: HACK_TIMEOUT_MS });
   }
 
+  /** Rewrite the mission file with its starter code → `{source}` (the starter text). */
   reset(id) {
     return this.#request('POST', `/api/missions/${segment(id)}/reset`);
   }
@@ -96,7 +124,7 @@ export class Api {
     return this.#request('GET', '/api/productivity');
   }
 
-  /** {course, minutes, topic?, on_date?, request_id} → {activity, snapshot} */
+  /** {course, minutes, topic?, on_date?, request_id} → {activity, snapshot (today's dashboard)} */
   logStudy(entry) {
     return this.#request('POST', '/api/productivity/study', { body: entry });
   }

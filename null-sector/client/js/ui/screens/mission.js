@@ -17,9 +17,11 @@
  * as `server:file`: a clean editor adopts them in place (scroll kept), a dirty one raises a
  * conflict bar (LOAD DISK / KEEP MINE) and autosave holds until the player decides.
  *
- * Restore: RESTORE in the code panel head opens an in-page confirm bar (Cancel is focused, Esc
- * closes it). Confirming runs `api.reset(id)` through the same save chain — so an in-flight
- * autosave can never land on top of the fresh starter — then loads the starter into the editor.
+ * Restore: RESTORE in the code panel head (or Alt+R, which works from inside the editor, where
+ * Tab indents) opens an in-page confirm bar: Cancel is focused, Esc closes it. Confirming runs
+ * `api.reset(id)` through the same save chain — so an in-flight autosave can never land on top
+ * of the fresh starter — then loads the starter into the editor. The watcher's `server:file`
+ * echo of the reset is held while the request flies and dropped once the starter is loaded.
  *
  * Victory: the profile *before* the hack is captured when HACK is pressed, before the request
  * leaves. The server pushes the post-victory profile over SSE (`state`) as soon as it answers,
@@ -179,6 +181,7 @@ export class MissionScreen {
   #busy = false;
   #leaving = false;
   #restoring = false;
+  #restoreEcho = null; // a `server:file` that arrived while a restore was in flight
   #attempts = 0;
   #rows = []; // {el, icon, state, intelMsg, intelHint, seg, shards, objective}
   #artLines = [];
@@ -213,6 +216,7 @@ export class MissionScreen {
     this.#timerPhase = '';
     this.#conflictText = null;
     this.#restoring = false;
+    this.#restoreEcho = null;
     this.#saveChain = Promise.resolve(true);
     // screen--staged: the glass panels fade themselves (.rise) so backdrop blur never drops out.
     this.el = h('section', { class: 'screen screen--mission screen--staged', 'aria-label': 'Mission' });
@@ -314,6 +318,13 @@ export class MissionScreen {
     if (isMod(e) && !e.altKey && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       this.#saveNow();
+      return true;
+    }
+    // Alt+R (by code: Option+R types "®" on macOS). The editor traps Tab, so this is the
+    // keyboard way to the restore bar from inside it.
+    if (e.altKey && !isMod(e) && !e.shiftKey && e.code === 'KeyR' && !e.repeat) {
+      e.preventDefault();
+      this.#askRestore();
       return true;
     }
     return false;
@@ -483,8 +494,9 @@ export class MissionScreen {
       {
         class: 'btn btn--ghost mission-restore',
         type: 'button',
-        title: 'Restore the original starter code',
-        'aria-label': 'Restore starter code',
+        title: 'Restore the original starter code · Alt+R',
+        'aria-label': 'Restore starter code (Alt+R)',
+        'aria-keyshortcuts': 'Alt+R',
         'aria-controls': 'mission-restore-bar',
         'aria-expanded': 'false',
         onclick: () => this.#askRestore(),
@@ -767,6 +779,12 @@ export class MissionScreen {
 
   #onDiskFile(data) {
     if (!this.#alive || !data || data.mission !== this.#id || typeof data.source !== 'string' || !this.#editor) return;
+    if (this.#restoring) {
+      // Most likely the watcher seeing our own reset: the response loads it. Kept in case the
+      // restore fails, so a real external edit is still offered afterwards.
+      this.#restoreEcho = data;
+      return;
+    }
     const disk = data.source;
     const editor = this.#editor;
     if (disk === editor.value) {
@@ -955,6 +973,10 @@ export class MissionScreen {
       ctx.toast?.(`RESTORE FAILED — ${err?.message || 'link lost'}`, { kind: 'error' });
       ctx.bus.emit('ui:error', {});
       this.#log('bad', 'SYS', `Restore failed: ${err?.message || 'link lost'}. Your code was not changed.`);
+      const echo = this.#restoreEcho;
+      this.#restoreEcho = null;
+      if (echo) this.#onDiskFile(echo); // the file did change on disk: treat it as an external edit
+      if (this.#editor && document.activeElement === document.body) this.#editor.focus();
       return false;
     }
     if (!this.#alive || !this.#editor) return true;
@@ -968,6 +990,9 @@ export class MissionScreen {
     this.#diskText = source;
     this.#setSync('synced');
     this.#restoring = false;
+    const echo = this.#restoreEcho;
+    this.#restoreEcho = null;
+    if (echo && echo.source !== source) this.#onDiskFile(echo); // a later external edit still counts
     this.#restoreControls();
     this.#closeRestoreBar();
     this.#log('sys', 'SYS', 'Starter code restored — the mission file is back to its original state.');

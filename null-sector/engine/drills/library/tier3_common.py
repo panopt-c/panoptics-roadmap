@@ -103,23 +103,29 @@ def same(got, expected, *, approx: bool = False, rel_tol: float = 1e-6, abs_tol:
         return (type(got) is type(expected) and len(got) == len(expected)
                 and all(same(g, e, approx=approx, rel_tol=rel_tol, abs_tol=abs_tol) for g, e in zip(got, expected)))
     if isinstance(expected, dict):
-        return (type(got) is dict and list(got.keys()) == list(expected.keys()) or
-                type(got) is dict and set(map(repr, got.keys())) == set(map(repr, expected.keys()))) \
-            and all(same(got[k], expected[k], approx=approx, rel_tol=rel_tol, abs_tol=abs_tol) for k in expected)
+        # Any dict (defaultdict and Counter included) with exactly the same keys; order is free.
+        return (isinstance(got, dict) and _keyset(got) == _keyset(expected)
+                and all(same(got[k], expected[k], approx=approx, rel_tol=rel_tol, abs_tol=abs_tol) for k in expected))
     return type(got) is type(expected) and got == expected
+
+
+def _keyset(mapping: dict) -> set:
+    return {(type(k), k) for k in mapping}
 
 
 def shape_note(got, expected) -> str:
     """One sentence on HOW a result is off, when the problem is its shape rather than its value."""
     if got is None and expected is not None:
         return " It returned None: every path through the function needs a `return`."
-    if isinstance(expected, (list, tuple, dict)) and type(got) is not type(expected):
+    if isinstance(expected, dict) and isinstance(got, dict):
+        pass
+    elif isinstance(expected, (list, tuple, dict)) and type(got) is not type(expected):
         return f" That's {type_name(type(got))}; the contract asks for {type_name(type(expected))}."
     if isinstance(expected, (list, tuple)) and len(got) != len(expected):
         return f" It has {len(got)} items; it should have {len(expected)}."
-    if isinstance(expected, dict) and isinstance(got, dict) and got.keys() != expected.keys():
-        missing = [k for k in expected if k not in got]
-        extra = [k for k in got if k not in expected]
+    if isinstance(expected, dict) and isinstance(got, dict) and _keyset(got) != _keyset(expected):
+        missing = [k for k in expected if (type(k), k) not in _keyset(got)]
+        extra = [k for k in got if (type(k), k) not in _keyset(expected)]
         bits = []
         if missing:
             bits.append(f"missing keys {show(missing, 60)}")
@@ -556,3 +562,114 @@ _HEADER = '''"""
 def header(title: str, tier: int, *lines: str) -> str:
     body = "\n".join(f"  {line}".rstrip() for line in lines)
     return _HEADER.format(title=title, tier=tier, label=LABELS[tier], lines=body)
+
+
+# ── more code readers ─────────────────────────────────────────────────────────────────
+
+def calls_in(ctx, func_name: str) -> set[str]:
+    """Names called inside `def func_name` (plain calls and method calls): {'sorted', 'sort', 'count'}."""
+    node = function_node(ctx, func_name)
+    found: set[str] = set()
+    if node is None:
+        return found
+    for n in ast.walk(node):
+        if isinstance(n, ast.Call):
+            if isinstance(n.func, ast.Name):
+                found.add(n.func.id)
+            elif isinstance(n.func, ast.Attribute):
+                found.add(n.func.attr)
+    return found
+
+
+def forbid(ctx, func_name: str, banned, message: str, hint: str = "") -> None:
+    """Fail if `def func_name` calls any of `banned` (e.g. {'sorted', 'sort'} in a merge drill)."""
+    used = sorted(calls_in(ctx, func_name) & set(banned))
+    if used:
+        raise Fail(f"`{func_name}` calls {', '.join(f'{u}()' for u in used)}. {message}", hint=hint)
+
+
+def handlers_in(ctx, func_name: str) -> list[ast.ExceptHandler]:
+    node = function_node(ctx, func_name)
+    return [n for n in ast.walk(node) if isinstance(n, ast.ExceptHandler)] if node else []
+
+
+def generator_function(ctx, name: str):
+    """The player's `name`, which must be a generator function (its body uses `yield`)."""
+    import inspect
+    fn = function(ctx, name)
+    if not inspect.isgeneratorfunction(fn):
+        raise Fail(f"`{name}` is a normal function. This contract needs a generator: a function that uses "
+                   f"`yield` to hand out values one at a time.",
+                   hint="Replace  result.append(x) ... return result  with  yield x  inside the loop.")
+    return fn
+
+
+def pull(gen, shown: str, n: int | None = None, *, hint: str = "") -> list:
+    """Collect up to `n` items (all, if None) from a player generator, with crash reporting."""
+    import itertools
+
+    def collect():
+        it = iter(gen)
+        return list(it) if n is None else list(itertools.islice(it, n))
+    return invoke(collect, shown, hint=hint,
+                  runaway="It kept pulling from the source long after it had what it needed.")
+
+
+@contextlib.contextmanager
+def sql_trace(conn):
+    """Record every SQL statement a sqlite3 connection runs: `with sql_trace(conn) as log: ...`."""
+    log: list[str] = []
+    conn.set_trace_callback(log.append)
+    try:
+        yield log
+    finally:
+        conn.set_trace_callback(None)
+
+
+# ── building a tier-3/4 drill mission ─────────────────────────────────────────────────
+
+def line(speaker: str, text: str, mood: str = "neutral") -> dict:
+    """One dialogue line (GAME_DESIGN §5.2)."""
+    if len(text) > 160:
+        raise ValueError(f"dialogue line over 160 chars: {text!r}")
+    return {"speaker": speaker, "text": text, "mood": mood}
+
+
+CRASH_POOL = [
+    [line("cipher", "Your file fell over before the grader could ask it anything. The last line of the trace names the problem.", "alarm")],
+    [line("cipher", "Crash on load. Run the file yourself: the sample block at the bottom will show you the same error.", "alarm")],
+    [line("rust", "Code broke before the test even started. I don't pay for parts that arrive in pieces.", "smirk")],
+    [line("cipher", "Indentation, a missing colon, a typo in a name. Small things. Read the line number, then the line above it.", "neutral")],
+]
+
+FAIL_POOL = [
+    [line("cipher", "The failing layer shows the exact call. Run that one case by hand and compare each step.", "neutral")],
+    [line("cipher", "Close is not equal. Check the edge case in the message first: empty input, a tie, a duplicate.", "neutral")],
+    [line("vex", "Still on this one? I cleared it before my coffee cooled. Read the hint, {callsign}.", "smirk")],
+    [line("nova", "Contract's still open, {callsign}. One layer at a time. The log tells you which one.", "warm")],
+    [line("rust", "Half a part is no part. Finish the job and we talk payment.", "neutral")],
+    [line("cipher", "The grader feeds fresh data every time. If it only works on the sample, it doesn't work.", "neutral")],
+]
+
+
+def build(*, title: str, tier: int, enemy: str, prompt: str, manual: str, starter: str,
+          concepts: tuple[str, ...], intro: list[dict], victory: list[dict], brief: tuple[str, ...] = (),
+          timeout: float = 10.0):
+    """A tier-3/4 drill Mission with the house header, dialogue pools and enemy name."""
+    from engine.drills import make_mission   # late import: engine.drills imports this package
+    mission = make_mission(title=title, prompt=prompt, starter=header(title, tier, *brief) + starter.lstrip("\n"),
+                           tier=tier, concepts=concepts, manual=manual, enemy=enemy, timeout=timeout)
+    mission.dialogue = {"intro": intro, "crash": CRASH_POOL, "fail": FAIL_POOL, "victory": victory}
+    return mission
+
+
+# ── seeded flavour data ───────────────────────────────────────────────────────────────
+
+UNITS = ("reactor", "coolant", "relay", "furnace", "conveyor", "uplink", "turbine", "vault", "gate", "smelter")
+WORDS = ("ash", "ember", "static", "signal", "ghost", "cipher", "relay", "pulse", "shard", "vector", "null",
+         "drift", "spark", "echo", "rust", "flux", "grid", "core", "node", "byte")
+
+
+def sample(rng, pool, k: int) -> list:
+    """k distinct items from `pool`, in random order."""
+    return rng.sample(list(pool), k)

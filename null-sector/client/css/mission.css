@@ -539,6 +539,149 @@
   flex: 0 0 auto;
 }
 
+/* restore starter code: a quiet tool in the head, a danger-toned confirm bar over the editor */
+.mission-code__tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.mission-restore.btn {
+  --c: 5px;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 9px 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.mission-restore svg {
+  display: block;
+  transition: transform var(--t-slow) var(--ease-out);
+}
+
+.mission-restore:hover:not(:disabled) svg,
+.mission-restore.is-on svg {
+  transform: rotate(-140deg);
+}
+
+.mission-restore.is-on {
+  --accent: var(--blood);
+  --accent-rgb: var(--blood-rgb);
+  --btn-fill: rgba(var(--accent-rgb), 0.12);
+  --btn-line: rgba(var(--accent-rgb), 0.85);
+  color: #fff;
+}
+
+.mission-restore-bar {
+  --accent: var(--blood);
+  --accent-rgb: var(--blood-rgb);
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  background: rgba(24, 6, 11, 0.95);
+  border: 1px solid rgba(var(--blood-rgb), 0.55);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6), 0 0 22px rgba(var(--blood-rgb), 0.14);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  animation: mission-conflict-in 300ms var(--ease-back) both;
+}
+
+.mission-restore-bar.is-out {
+  animation: mission-conflict-out 200ms var(--ease-out) both;
+}
+
+.mission-restore-bar__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--void);
+  background: var(--blood);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.mission-restore-bar__icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mission-restore-bar.is-working .mission-restore-bar__icon svg {
+  animation: mission-restore-spin 0.8s linear infinite;
+}
+
+.mission-restore-bar__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--steel);
+}
+
+.mission-restore-bar__text strong {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: var(--tracking-label);
+  color: var(--blood);
+}
+
+.mission-restore-bar__text code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  color: var(--text);
+}
+
+.mission-restore-bar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.mission-restore-bar .btn {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 11px;
+}
+
+@keyframes mission-restore-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@media (max-width: 1240px) {
+  .mission-restore__label {
+    display: none;
+  }
+
+  .mission-restore.btn {
+    padding: 0 6px;
+  }
+
+  .mission-restore-bar {
+    flex-wrap: wrap;
+  }
+
+  .mission-restore-bar__text {
+    flex-basis: calc(100% - 40px);
+  }
+
+  .mission-restore-bar__actions {
+    margin-left: auto;
+  }
+}
+
 /* combat log footer */
 .mission-log {
   flex: 0 0 clamp(150px, 29%, 260px);
@@ -1708,7 +1851,8 @@ body.reduce-motion .enemy__scan,
 body.reduce-motion .screen--mission.is-charging .enemy__body,
 body.reduce-motion .log-line,
 body.reduce-motion .log-head,
-body.reduce-motion .log-error {
+body.reduce-motion .log-error,
+body.reduce-motion .mission-restore-bar__icon svg {
   animation: none;
 }
 
@@ -1721,7 +1865,8 @@ body.reduce-motion .log-error {
   .screen--mission.is-charging .enemy__body,
   .log-line,
   .log-head,
-  .log-error {
+  .log-error,
+  .mission-restore-bar__icon svg {
     animation: none;
   }
 }

@@ -53,7 +53,7 @@ class PathsTests(SandboxTestCase):
         self.session.deploy("L01")
         self.session.attack("L01")
         written = {p.relative_to(self.root).as_posix() for p in self.root.rglob("*") if p.is_file()}
-        self.assertEqual(written, {"config.json", "save.json", "missions/level_01_cold_boot.py"})
+        self.assertEqual(written, {"config.json", "save.json", "save.json.lock", "missions/level_01_cold_boot.py"})
 
     def test_save_writes_are_atomic_and_leave_no_temp_files(self):
         self.session.deploy("L01")

@@ -63,7 +63,7 @@ def _matvec_spot(got, args, _kwargs):
 def _matmul_spot(got, args, _kwargs):
     A, B = args
     right = _ref_matmul(A, B)
-    if right and len(right) == len(right[0]) and near(got, _transpose(right)):
+    if right and right[0] and near(got, _transpose(right)):
         return ("Rows and columns are swapped: you built the transpose of the answer.",
                 "result[i][j] is row i of A dotted with column j of B. The outer loop runs over A's rows.")
     return None

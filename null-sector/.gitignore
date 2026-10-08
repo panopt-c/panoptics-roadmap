@@ -2,6 +2,8 @@
 config.json
 # Personal progress + generated media
 save.json
+save.json.lock
+save.json.corrupt-*
 cutscenes/*
 !cutscenes/.gitkeep
 __pycache__/

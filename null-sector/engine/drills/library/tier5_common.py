@@ -67,7 +67,7 @@ def _fmt(value) -> str:
 
 def show(value, limit: int = 140) -> str:
     """A short, readable repr: floats trimmed to 10 significant digits, long data elided."""
-    text = _fmt(value)
+    text = _fmt(value).replace("`", "'")     # the client renders `…` as code; keep values intact
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
@@ -115,6 +115,21 @@ def same(got, expected, *, approx: bool = True, rel_tol: float = 1e-6, abs_tol: 
                 and all(same(got[k], expected[k], approx=approx, rel_tol=rel_tol, abs_tol=abs_tol)
                         for k in expected))
     return type(got) is type(expected) and got == expected
+
+
+def spotter(fn: Callable) -> Callable:
+    """Decorator for spot/diagnosis helpers: a helper that crashes on odd output stays silent.
+
+    Spotters recompute "the answer you'd get with mistake X" from the player's inputs, which can
+    divide by zero or index past the end on edge cases. That must never break the check itself.
+    """
+    def safe(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception:  # noqa: BLE001
+            return None
+    safe.__name__ = getattr(fn, "__name__", "spot")
+    return safe
 
 
 def near(got, expected, tol: float = 1e-6) -> bool:
@@ -325,6 +340,175 @@ def guard_real_time(ctx):
             setattr(time, name, real)
         for key, name in aliases.items():
             ctx.ns[key] = originals[name]
+
+
+def no_real_time(seen: dict, who: str, *, clock: bool = True, sleep: bool = True) -> None:
+    """Fail if code run inside `guard_real_time` touched the real clock or the real sleep."""
+    if sleep and seen["sleeps"]:
+        raise Fail(f"`{who}` called the real time.sleep({show(seen['sleeps'][0])}). Use the `sleep` you were "
+                   "handed instead.",
+                   hint="Take the waiting function as a parameter and call that. Tests (and async code) swap it "
+                        "for one that doesn't block, which is how this grader runs in milliseconds.")
+    if clock and seen["clock"]:
+        raise Fail(f"`{who}` read the real clock (time.{seen['clock'][0]}()). Read time only from the `clock` "
+                   "you were given.",
+                   hint="Store the clock in __init__ (self.clock = clock) and call self.clock() whenever you "
+                        "need the current time.")
+
+
+# ── driving a player's class next to a reference class ────────────────────────────────
+
+class Replay:
+    """Drive a player object and a reference object through identical method calls.
+
+    Each call is compared at once. On the first difference the layer fails with the replayed
+    history, e.g.  After `b = TokenBucket(3, 1.0, clock); b.allow(); clock +0.5s`, `b.allow()`
+    returned True — expected False.  If the reference raises (always a builtin exception here),
+    the player must raise the same type. Constructor arguments are shared, not copied, so a
+    FakeClock handed to both objects stays in lockstep.
+    """
+
+    KEEP = 7
+
+    def __init__(self, ctx, cls_name: str, reference: Callable, args=(), kwargs=None, *, var: str = "obj",
+                 hint: str = ""):
+        self.var = var
+        self.hint = hint
+        cls = klass(ctx, cls_name)
+        kwargs = kwargs or {}
+        shown = call_text(cls_name, args, kwargs)
+        self.steps = [f"{var} = {shown}"]
+        self.ref = reference(*args, **kwargs)
+        self.obj = invoke(cls, shown, args, kwargs, hint=hint)
+
+    def note(self, text: str) -> None:
+        """Record a step that isn't a method call, e.g. 'clock +0.5s'."""
+        self.steps.append(text)
+
+    def trail(self) -> str:
+        steps = self.steps[-self.KEEP:]
+        return ("… " if len(self.steps) > self.KEEP else "") + "; ".join(steps)
+
+    def fail(self, what: str, hint: str | None = None):
+        raise Fail(f"After `{self.trail()}`, {what}", hint=self.hint if hint is None else hint)
+
+    def call(self, meth: str, *args, approx: bool = True, hint: str | None = None,
+             spot: Callable | None = None):
+        """Call `meth` on both objects. Returns the player's result (or the exception it raised)."""
+        shown = call_text(f"{self.var}.{meth}", args)
+        try:
+            expected, ref_exc = getattr(self.ref, meth)(*copy.deepcopy(args)), None
+        except Exception as exc:  # noqa: BLE001 — the reference raising is part of the contract
+            expected, ref_exc = None, exc
+        bound = getattr(self.obj, meth, None)
+        if not callable(bound):
+            self.fail(f"`{self.var}` has no `{meth}()` method.", hint=f"Add  def {meth}(self, ...):  to the class.")
+        try:
+            got, exc = bound(*copy.deepcopy(args)), None
+        except Runaway:
+            self.fail(f"`{shown}` never stopped.")
+        except Fail:
+            raise
+        except Exception as caught:  # noqa: BLE001
+            got, exc = None, caught
+        if ref_exc is not None:
+            if exc is None:
+                self.fail(f"`{shown}` returned {show(got)}. It should raise {type(ref_exc).__name__} "
+                          f"({ref_exc}).", hint)
+            if not isinstance(exc, type(ref_exc)):
+                self.fail(f"`{shown}` raised {type(exc).__name__}: {exc}. It should raise "
+                          f"{type(ref_exc).__name__} ({ref_exc}).", hint)
+            self.steps.append(f"{shown} -> {type(ref_exc).__name__}")
+            return exc
+        if exc is not None:
+            self.fail(f"`{shown}` raised {type(exc).__name__}: {exc}", hint)
+        if not same(got, expected, approx=approx):
+            found = spot(got, expected) if spot else None
+            if found:
+                self.fail(f"`{shown}` returned {show(got)}. {found[0]}", found[1] or hint)
+            self.fail(f"`{shown}` returned {show(got)} — expected {show(expected)}.{shape_note(got, expected)}",
+                      hint)
+        self.steps.append(shown)
+        return got
+
+    def value(self, label: str, got_fn: Callable, expected_fn: Callable, *, approx: bool = True,
+              hint: str | None = None, spot: Callable | None = None):
+        """Compare an arbitrary read, e.g. ("len(c)", len, len)."""
+        expected = expected_fn(self.ref)
+        try:
+            got = got_fn(self.obj)
+        except Runaway:
+            self.fail(f"`{label}` never stopped.")
+        except Fail:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            self.fail(f"`{label}` raised {type(exc).__name__}: {exc}", hint)
+        if not same(got, expected, approx=approx):
+            found = spot(got, expected) if spot else None
+            if found:
+                self.fail(f"`{label}` is {show(got)}. {found[0]}", found[1] or hint)
+            self.fail(f"`{label}` is {show(got)} — expected {show(expected)}.{shape_note(got, expected)}", hint)
+        return got
+
+
+# ── work meters ───────────────────────────────────────────────────────────────────────
+
+class Meter:
+    """Counts hash and equality probes made on `Probe` keys while `on` is True.
+
+    A dict lookup on a Probe costs about one probe; scanning a list of n Probes costs about n.
+    So "every operation is O(1)" becomes a deterministic budget instead of a stopwatch. Past
+    `cap` probes it raises Runaway inside the player's code, which stops a slow solution early.
+    """
+
+    def __init__(self, cap: int):
+        self.cap = cap
+        self.count = 0
+        self.on = False
+
+    def tick(self) -> None:
+        if self.on:
+            self.count += 1
+            if self.count > self.cap:
+                raise Runaway(f"more than {self.cap} key probes")
+
+
+class Probe:
+    """A hashable key whose __hash__ and __eq__ report to a Meter. Shown as K17."""
+
+    __slots__ = ("n", "meter")
+
+    def __init__(self, n: int, meter: Meter):
+        self.n = n
+        self.meter = meter
+
+    def __hash__(self) -> int:
+        self.meter.tick()
+        return hash(("probe", self.n))
+
+    def __eq__(self, other) -> bool:
+        self.meter.tick()
+        return isinstance(other, Probe) and other.n == self.n
+
+    def __lt__(self, other) -> bool:
+        self.meter.tick()
+        return isinstance(other, Probe) and self.n < other.n
+
+    def __repr__(self) -> str:
+        return f"K{self.n}"
+
+
+def first_difference(got: list, expected: list, *, approx: bool = True):
+    """(index, got_item, expected_item) for the first position where two lists differ, else None.
+
+    A missing item on either side is reported as the string '(nothing)'.
+    """
+    for i in range(max(len(got), len(expected))):
+        g = got[i] if i < len(got) else "(nothing)"
+        e = expected[i] if i < len(expected) else "(nothing)"
+        if not same(g, e, approx=approx):
+            return i, g, e
+    return None
 
 
 # ── small math helpers shared by references ───────────────────────────────────────────

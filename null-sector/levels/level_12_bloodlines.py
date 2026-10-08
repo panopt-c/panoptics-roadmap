@@ -564,7 +564,7 @@ def _in_range(ctx):
     Glider = _make_line(Drone, "Glider", 0.5, "glider")
     Bruiser = _make_line(Drone, "Bruiser", 3, "bruiser")
     cases = [
-        (lambda: [Drone("Bastion", 30), Glider("Wisp", 10), Bruiser("Anvil", 50), Drone("Dregs", 29)], 15,
+        (lambda: [Drone("Bastion", 30), Glider("Wisp", 10), Bruiser("Anvil", 44), Drone("Dregs", 29)], 15,
          ["Bastion", "Wisp"]),
         (lambda: [Bruiser("Anvil", 90), Glider("Moth", 4), Drone("Pike", 100)], 30, ["Anvil", "Pike"]),
         (lambda: [Glider("Ash", 5), Drone("Cole", 0)], 0, ["Ash", "Cole"]),

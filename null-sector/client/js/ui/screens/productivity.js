@@ -17,17 +17,27 @@
  * Retry safety: each log carries a `request_id`. SubmissionLedger reuses the pending id while
  * the payload is unchanged and issues a new one as soon as it changes. Only *uncertain*
  * failures (unreachable, timeout, 5xx: the server may have recorded it) are retried
- * automatically, with the same id and payload; a definite 4xx answer settles the id.
+ * automatically, with the same id and payload; a definite 4xx answer settles the id. An empty
+ * Date field means today: when this browser and the server agree on what today is, that day
+ * is pinned into the request at the first submit, so a retry after midnight still matches.
+ *
+ * Days: the dashboard always shows *today* (the local calendar, which is the server's). Only a
+ * GET is trusted as "today's" view; a log response, SSE push or cached snapshot for an earlier
+ * day (a backfill on an older server) is never rendered — it triggers a quiet re-fetch instead.
+ * A backfilled entry still shows in the feed under its own date, and the Date field resets to
+ * empty (= today) after every log. The day is re-checked every 30 s and when the tab returns,
+ * so a screen left open past midnight rolls over by itself.
  *
  * States: loading (skeleton shimmer), fault (first load failed: message + retry), empty copy
- * for every list, inline field errors, an aria-live status line per form.
+ * for every list, inline field errors, an aria-live status line per form. Field rules live in
+ * LIMITS, which mirrors the server's validation (engine/productivity/tracker.py).
  *
  * Keys (outside text fields): 1 / 2 / 3 pick the log form, R refreshes, H returns to the hub.
  * Anywhere: Ctrl/Cmd+Enter submits the visible form. Tabs follow the ARIA tablist pattern.
  */
 import { h, sleep, countUp, rectCenter } from '../dom.js';
 import { settings } from '../../core/settings.js';
-import { ApiError } from '../api.js';
+import { ApiError, localDay, snapshotDay, isEarlierDay } from '../api.js';
 
 export const COURSES = Object.freeze([
   'Algebra 2', 'Trigonometry', 'Precalculus', 'Calculus 1', 'Calculus 2', 'Calculus 3', 'Linear Algebra',
@@ -38,6 +48,28 @@ const QUICK_MINUTES = [15, 30, 45, 60, 90];
 const WORKOUT_PRESETS = ['Strength', 'Run', 'Walk', 'Cycling', 'HIIT', 'Mobility', 'Swim', 'Sports'];
 const RETRY_DELAYS_MS = [700, 2000]; // automatic retries after an uncertain failure
 const FEED_LIMIT = 12;
+const MILESTONE_LIMIT = 20; // newest first; the full history lives in GET /api/productivity/rewards
+const DAY_CHECK_MS = 30_000;
+const REFRESH_DEBOUNCE_MS = 120;
+
+/**
+ * Field rules, mirroring the server (engine/productivity/tracker.py): minutes 1–1440; sets and
+ * reps are optional *positive* integers (0 is rejected there, so it is rejected here, with a
+ * hint to leave the field empty); load and distance are optional non-negative numbers. The
+ * upper bounds are sanity caps inside the server's own limits, so anything this form accepts
+ * the server accepts too. Text lengths match the inputs' maxlength.
+ */
+export const LIMITS = Object.freeze({
+  minutes: { min: 1, max: 1440 },
+  sets: { min: 1, max: 1000 },
+  reps: { min: 1, max: 10000 },
+  load_lbs: { min: 0, max: 2000 },
+  distance_miles: { min: 0, max: 500 },
+  weight_lbs: { min: 50, max: 800 },
+  topic: 200,
+  activity: 80,
+  note: 500,
+});
 const RING_R = 52;
 const RING_C = 2 * Math.PI * RING_R;
 
@@ -92,15 +124,24 @@ function newRequestId() {
  * an id for different data).
  */
 export class SubmissionLedger {
-  #pending = new Map(); // kind → {key, id}
+  #pending = new Map(); // kind → {key, id, day}
 
-  idFor(kind, payload) {
+  /**
+   * The pending submission for `payload`: `{id, day}`. `day` is `payload.on_date` when the
+   * player typed one, else `today` as it was at the *first* submit of this payload (pinned, so
+   * a retry after midnight resends the original day), or null to let the server default it.
+   */
+  claim(kind, payload, today = null) {
     const key = stableKey(payload);
     const pending = this.#pending.get(kind);
-    if (pending && pending.key === key) return pending.id;
-    const id = newRequestId();
-    this.#pending.set(kind, { key, id });
-    return id;
+    if (pending && pending.key === key) return pending;
+    const entry = { key, id: newRequestId(), day: payload.on_date || today || null };
+    this.#pending.set(kind, entry);
+    return entry;
+  }
+
+  idFor(kind, payload) {
+    return this.claim(kind, payload).id;
   }
 
   pending(kind) {
