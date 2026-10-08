@@ -1,7 +1,7 @@
 /**
  * HubScreen — the operative's command hub (docs/ARCHITECTURE.md §4.2).
  *
- *   ┌ topbar: logo · target sector · Higgsfield feed chip · settings ─────────────┐
+ *   ┌ topbar: logo · target sector · feed chip · Monastery (3D hub) · settings ───┐
  *   │ OPERATIVE card      │ SECTOR MAP (5 sectors × 5 levels)    │ MEMORY        │
  *   │ portrait, callsign, │ a PCB-style circuit winding upward   │ FRAGMENTS     │
  *   │ rank, XP, breaches  │ from S0 to the Core                  │ (gallery)     │
@@ -24,9 +24,19 @@
  * gallery re-renders only when its contents change). Cutscene renders in progress
  * (`server:cutscene`) show as "decoding" cards in the gallery.
  *
- * Keys: Enter deploys the current target; O opens the command center (study & fitness);
- * arrows walk the map; Esc closes the fragment
- * viewer (otherwise it falls through to the settings menu).
+ * Memory fragments: rendered media (State.gallery) first, then one "in-engine transmission"
+ * card per cleared mission that has a cutscene but no rendered media, so a breach without a
+ * Higgsfield key still leaves something to re-watch. Candidates are the cleared levels that can
+ * carry a cutscene (the first level and the bosses, GAME_DESIGN §9); each one's Mission payload
+ * is fetched once per app session to confirm it has a cutscene, and opens the cutscene screen.
+ *
+ * The Monastery: the walkable 3D hub (GAME_DESIGN §11.2) is entered from the topbar icon or N.
+ * The button is hidden when the renderer has no WebGL2 (`renderer.three === null`, §11.6),
+ * where this classic hub is the only hub.
+ *
+ * Keys: Enter deploys the current target; N enters the Monastery; O opens the command center
+ * (study & fitness); arrows walk the map; Esc closes the fragment viewer (otherwise it falls
+ * through to the settings menu).
  */
 import { h, countUp } from '../dom.js';
 import { settings } from '../../core/settings.js';
@@ -55,6 +65,10 @@ const ICON_GEAR =
 const ICON_LOCK =
   '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 7h10v7H3z" fill="currentColor"/><path d="M8 9.5v2" stroke="var(--void)" stroke-width="1.6"/></svg>';
 const ICON_CLOSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.6"/></svg>';
+const ICON_MONASTERY =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 21.2c1.9-5.1 1.9-10 .3-14.6h10.6c-1.6 4.6-1.6 9.5.3 14.6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10.4 21.2v-3.3a1.6 1.6 0 0 1 3.2 0v3.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8.1 11.2h7.8" stroke="currentColor" stroke-width="1.2" opacity=".55"/><path d="M12 6.6V2.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".75"/></svg>';
+const ICON_TRANSMISSION =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6.8v10.4l8.6-5.2z" fill="currentColor"/></svg>';
 const ICON_FRAGMENT =
   '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 12h20l-4 6h16v18H20l4-6H8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 30l6-7 5 5 4-4 5 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 const PORTRAIT_PLACEHOLDER =
@@ -91,6 +105,11 @@ export class HubScreen {
   #geo = null; // last map geometry (see #geometry)
   #rows = 0;
   #unlockedNow = null; // id whose incoming trace draws during the unlock reveal
+  // Cleared missions' cutscenes, for the in-engine transmission cards. Kept for the app's
+  // lifetime (screens are singletons; cutscene content never changes): id → Mission | null.
+  #transmissions = new Map();
+  #transmissionsLoading = new Set();
+  #transmissionsFailed = new Set(); // retried on the next visit
 
   constructor(ctx) {
     this.#ctx = ctx;
@@ -112,6 +131,7 @@ export class HubScreen {
     this.#lightbox = null;
     this.#size = { w: 0, h: 0 };
     this.#geo = null;
+    this.#transmissionsFailed.clear();
     this.el = h('section', { class: 'screen screen--hub screen--staged', 'aria-label': 'Command hub' });
 
     ctx.bus.emit('mood', { name: 'calm' });
@@ -165,6 +185,11 @@ export class HubScreen {
     if ((e.key === 'o' || e.key === 'O') && !e.repeat) {
       e.preventDefault();
       this.#openOps();
+      return true;
+    }
+    if ((e.key === 'n' || e.key === 'N') && !e.repeat && this.#monasteryAvailable()) {
+      e.preventDefault();
+      this.#openMonastery();
       return true;
     }
     const step = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [1, 0], ArrowDown: [-1, 0] }[e.key];
@@ -236,6 +261,17 @@ export class HubScreen {
     const r = this.#r;
     r.sectorChip = h('div', { class: 'hub-sector' });
     r.feed = h('span', { class: 'chip hub-feed' });
+    r.monastery = h('button', {
+      class: 'icon-btn hub-monastery',
+      type: 'button',
+      'data-action': 'monastery',
+      'aria-label': 'Enter the Monastery (N)',
+      'aria-keyshortcuts': 'N',
+      title: 'Enter the Monastery · N',
+      hidden: !this.#monasteryAvailable(),
+      html: ICON_MONASTERY,
+      onclick: () => this.#openMonastery(),
+    });
     this.#renderTopbar(state, target);
     return h(
       'header',
@@ -252,6 +288,7 @@ export class HubScreen {
         'div',
         { class: 'topbar__right' },
         r.feed,
+        r.monastery,
         h('button', { class: 'icon-btn icon-btn--gear', type: 'button', 'data-action': 'settings', 'aria-label': 'Settings (Esc)', title: 'Settings · Esc', html: ICON_GEAR }),
       ),
     );
@@ -422,6 +459,22 @@ export class HubScreen {
     if (this.#leaving) return;
     this.#ctx.bus.emit('ui:click', {});
     this.#ctx.screens.go('productivity');
+  }
+
+  // ── the Monastery (walkable 3D hub, GAME_DESIGN §11.2) ────────────────
+
+  /** The 3D hub needs WebGL2: §11.6 sets `renderer.three` to null without it. */
+  #monasteryAvailable() {
+    const renderer = this.#ctx.renderer;
+    return !!renderer && renderer.ok !== false && renderer.three !== null;
+  }
+
+  #openMonastery() {
+    if (this.#leaving || !this.#alive || !this.#monasteryAvailable()) return;
+    this.#leaving = true;
+    this.#ctx.bus.emit('ui:click', {});
+    this.#hideTip(this.#tipNode);
+    this.#ctx.screens.go('monastery');
   }
 
   #buildDeploy() {
@@ -874,10 +927,13 @@ export class HubScreen {
     const r = this.#r;
     const items = (state.gallery || []).filter((g) => g && g.url);
     const renders = [...this.#renders.entries()];
-    const key = JSON.stringify([items.map((g) => g.url), renders, !!state.higgsfield?.online]);
+    const transmissions = this.#transmissionCards(state, items);
+    const breaches = Math.max(0, state.profile?.breaches | 0);
+    const online = !!state.higgsfield?.online;
+    const key = JSON.stringify([items.map((g) => g.url), renders, transmissions.map((m) => m.id), breaches > 0, online]);
     if (key === this.#galleryKey) return;
     this.#galleryKey = key;
-    r.galleryCount.textContent = pad2(items.length);
+    r.galleryCount.textContent = pad2(items.length + transmissions.length);
 
     const cards = renders.map(([mission, stage]) =>
       h(
@@ -888,23 +944,103 @@ export class HubScreen {
       ),
     );
     items.forEach((item, i) => cards.push(this.#fragCard(item, i)));
+    transmissions.forEach((mission, i) => cards.push(this.#transmissionCard(mission, items.length + i)));
 
     r.galleryList.classList.toggle('is-empty', !cards.length);
     if (!cards.length) {
-      const online = !!state.higgsfield?.online;
+      // Before the first clear there is nothing to recover yet; after it, say where it went.
+      const [title, text] =
+        breaches === 0
+          ? ['No fragments recovered', 'Every breach restores a piece of who you were. Clear your first level to recover a memory.']
+          : online
+            ? ['Fragments decoding', 'Your breaches are logged. Memory fragments appear here as the feed renders their transmissions.']
+            : ['Transmissions in-engine', 'Your breaches are logged. Transmissions play in-engine; rendered memory fragments collect here.'];
       r.galleryList.replaceChildren(
         h(
           'div',
           { class: 'hub-gallery__empty' },
           h('span', { class: 'hub-gallery__empty-icon', html: ICON_FRAGMENT }),
-          h('p', { class: 'hub-gallery__empty-title' }, 'No fragments recovered'),
-          h('p', { class: 'hub-gallery__empty-text' }, 'Every breach restores a piece of who you were. Clear your first level to recover a memory.'),
-          online ? null : h('p', { class: 'hub-gallery__empty-note' }, 'Feed offline — transmissions play in-engine. Add a Higgsfield key to config.json to render them.'),
+          h('p', { class: 'hub-gallery__empty-title' }, title),
+          h('p', { class: 'hub-gallery__empty-text' }, text),
+          online ? null : h('p', { class: 'hub-gallery__empty-note' }, 'Feed offline — add a Higgsfield key to config.json to render transmissions as fragments.'),
         ),
       );
       return;
     }
+    if (transmissions.length && !online) {
+      cards.push(h('p', { class: 'hub-gallery__note' }, 'Feed offline — transmissions replay in-engine. Add a Higgsfield key to config.json to keep rendered fragments.'));
+    }
     r.galleryList.replaceChildren(...cards);
+  }
+
+  /**
+   * Cleared missions with a cutscene and no rendered media yet, in campaign order. Unknown
+   * candidates are fetched in the background; the gallery re-renders when they resolve.
+   */
+  #transmissionCards(state, items) {
+    const media = new Set(items.map((g) => g.mission));
+    const out = [];
+    this.#levels.forEach((level, i) => {
+      if (level.status !== 'cleared' || media.has(level.id) || this.#renders.has(level.id)) return;
+      if (!(i === 0 || level.boss)) return; // only the first level and bosses carry cutscenes
+      if (!this.#transmissions.has(level.id)) {
+        this.#loadTransmission(level.id);
+        return;
+      }
+      const mission = this.#transmissions.get(level.id);
+      if (mission) out.push(mission);
+    });
+    return out;
+  }
+
+  #loadTransmission(id) {
+    if (this.#transmissionsLoading.has(id) || this.#transmissionsFailed.has(id)) return;
+    this.#transmissionsLoading.add(id);
+    this.#ctx.api
+      .mission(id)
+      .then(
+        (mission) => {
+          const cut = mission?.cutscene;
+          const ok = cut && typeof cut === 'object' && (cut.title || (Array.isArray(cut.narration) && cut.narration.length));
+          this.#transmissions.set(id, ok ? mission : null);
+        },
+        () => this.#transmissionsFailed.add(id),
+      )
+      .finally(() => {
+        this.#transmissionsLoading.delete(id);
+        if (this.#alive && this.#r.galleryList && this.#ctx.state) this.#renderGallery(this.#ctx.state);
+      });
+  }
+
+  #transmissionCard(mission, i) {
+    const level = this.#byId.get(mission.id);
+    const color = level?.color || safeColor(mission.sector?.color);
+    const title = mission.cutscene?.title || mission.title || 'Transmission';
+    return h(
+      'button',
+      {
+        class: 'frag frag--transmission',
+        type: 'button',
+        style: `--n: ${i}; --c-rgb: ${level?.rgb || rgbTriplet(color)}`,
+        'aria-label': `Replay transmission ${mission.id} — ${title} (in-engine)`,
+        onclick: () => this.#playTransmission(mission),
+      },
+      h(
+        'span',
+        { class: 'frag__media frag__media--signal', 'aria-hidden': 'true' },
+        h('span', { class: 'frag__signal-grid' }),
+        h('span', { class: 'frag__play', html: ICON_TRANSMISSION }),
+      ),
+      h('span', { class: 'frag__meta' }, h('span', { class: 'frag__id mono' }, mission.id), h('span', { class: 'frag__title' }, title)),
+      h('span', { class: 'frag__kind is-engine' }, 'In-engine'),
+    );
+  }
+
+  #playTransmission(mission) {
+    if (this.#leaving || !this.#alive) return;
+    this.#leaving = true;
+    this.#hideTip(this.#tipNode);
+    this.#ctx.screens.go('cutscene', { mission });
   }
 
   #fragCard(item, i) {

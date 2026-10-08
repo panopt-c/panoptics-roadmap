@@ -17,6 +17,15 @@
  * as `server:file`: a clean editor adopts them in place (scroll kept), a dirty one raises a
  * conflict bar (LOAD DISK / KEEP MINE) and autosave holds until the player decides.
  *
+ * Restore: RESTORE in the code panel head opens an in-page confirm bar (Cancel is focused, Esc
+ * closes it). Confirming runs `api.reset(id)` through the same save chain — so an in-flight
+ * autosave can never land on top of the fresh starter — then loads the starter into the editor.
+ *
+ * Victory: the profile *before* the hack is captured when HACK is pressed, before the request
+ * leaves. The server pushes the post-victory profile over SSE (`state`) as soon as it answers,
+ * which main.js adopts into ctx.state immediately; reading ctx.state any later would hand the
+ * victory screen the new profile as "before" (no XP roll, no IDENTITY REGISTERED).
+ *
  * Lifecycle: every listener, interval, timeout and observer is registered through helpers that
  * `exit()` tears down. Pending choreography awaits use tracked timers, so leaving mid-hack
  * simply abandons the script (the `#alive` guard covers the in-flight request).
@@ -135,6 +144,8 @@ const ICON_GEAR =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 2.6 20.2 7.3v9.4L12 21.4 3.8 16.7V7.3Z"/><circle cx="12" cy="12" r="3.1"/></svg>';
 const ICON_FILE =
   '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M3.5 1.5h5.8l3.2 3.2v9.8h-9Z"/><path d="M9.2 1.6v3.2h3.2"/></svg>';
+const ICON_RESTORE =
+  '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square" aria-hidden="true"><path d="M3.2 6.2A5.2 5.2 0 1 1 3 9.6"/><path d="M2.6 2.8v3.6h3.6"/></svg>';
 
 const reduced = () => settings.get('reducedMotion');
 const pad2 = (n) => String(Math.max(0, n | 0)).padStart(2, '0');
@@ -167,6 +178,7 @@ export class MissionScreen {
   // combat state
   #busy = false;
   #leaving = false;
+  #restoring = false;
   #attempts = 0;
   #rows = []; // {el, icon, state, intelMsg, intelHint, seg, shards, objective}
   #artLines = [];
@@ -200,6 +212,7 @@ export class MissionScreen {
     this.#briefIndex = -1;
     this.#timerPhase = '';
     this.#conflictText = null;
+    this.#restoring = false;
     this.#saveChain = Promise.resolve(true);
     // screen--staged: the glass panels fade themselves (.rise) so backdrop blur never drops out.
     this.el = h('section', { class: 'screen screen--mission screen--staged', 'aria-label': 'Mission' });
@@ -255,8 +268,9 @@ export class MissionScreen {
     this.#alive = false;
     // Never lose work: capture a pending autosave (unless a conflict is waiting on the player)…
     const editor = this.#editor;
+    // (A confirmed restore in flight means the player chose to discard that text.)
     const unsaved =
-      editor && this.#conflictText === null && (this.#saveTimer || editor.dirty) && editor.value !== this.#diskText
+      editor && !this.#restoring && this.#conflictText === null && (this.#saveTimer || editor.dirty) && editor.value !== this.#diskText
         ? editor.value
         : null;
     // …tear everything down synchronously…
@@ -287,6 +301,11 @@ export class MissionScreen {
 
   onKey(e) {
     if (!this.#mission || e.defaultPrevented) return false;
+    if (e.key === 'Escape' && this.#restoreOpen()) {
+      e.preventDefault();
+      if (!this.#restoring) this.#cancelRestore(true);
+      return true;
+    }
     if (isMod(e) && e.key === 'Enter') {
       e.preventDefault();
       this.#hack();
@@ -459,6 +478,21 @@ export class MissionScreen {
     r.sync = h('span', { class: 'chip mission-sync', role: 'status' }, 'SYNCED');
     r.editorHost = h('div', { class: 'mission-editor' });
     r.conflict = h('div', { class: 'mission-conflict', hidden: true });
+    r.restore = h(
+      'button',
+      {
+        class: 'btn btn--ghost mission-restore',
+        type: 'button',
+        title: 'Restore the original starter code',
+        'aria-label': 'Restore starter code',
+        'aria-controls': 'mission-restore-bar',
+        'aria-expanded': 'false',
+        onclick: () => this.#askRestore(),
+      },
+      h('span', { class: 'mission-restore__icon', html: ICON_RESTORE }),
+      h('span', { class: 'mission-restore__label' }, 'Restore'),
+    );
+    r.restoreBar = this.#buildRestoreBar(m);
 
     r.logTabs = ['COMBAT LOG', 'OUTPUT'].map((label, i) =>
       h(
@@ -492,9 +526,9 @@ export class MissionScreen {
         'div',
         { class: 'panel__head mission-code__head' },
         h('span', { class: 'mission-code__file mono', title: m.file }, h('span', { html: ICON_FILE }), m.file),
-        r.sync,
+        h('div', { class: 'mission-code__tools' }, r.restore, r.sync),
       ),
-      h('div', { class: 'panel__body mission-code__body' }, r.editorHost, r.conflict, h('div', { class: 'mission-code__scan', 'aria-hidden': 'true' })),
+      h('div', { class: 'panel__body mission-code__body' }, r.editorHost, r.conflict, r.restoreBar, h('div', { class: 'mission-code__scan', 'aria-hidden': 'true' })),
       h(
         'footer',
         { class: 'mission-log' },
@@ -804,6 +838,155 @@ export class MissionScreen {
     else this.#save(true);
   }
 
+  // ── restore starter code ────────────────────────────────────────────
+
+  #buildRestoreBar(m) {
+    const r = this.#r;
+    r.restoreGo = h(
+      'button',
+      { class: 'btn btn--primary btn--danger mission-restore-bar__go', type: 'button', onclick: () => this.#restore() },
+      'Restore starter',
+    );
+    r.restoreCancel = h(
+      'button',
+      { class: 'btn btn--ghost mission-restore-bar__cancel', type: 'button', onclick: () => this.#cancelRestore(true) },
+      'Cancel',
+      h('span', { class: 'kbd' }, 'Esc'),
+    );
+    const file = String(m.file || '').split('/').pop() || 'this file';
+    return h(
+      'div',
+      {
+        class: 'mission-restore-bar',
+        id: 'mission-restore-bar',
+        role: 'alertdialog',
+        'aria-modal': 'false',
+        'aria-labelledby': 'mission-restore-title',
+        'aria-describedby': 'mission-restore-text',
+        hidden: true,
+      },
+      h('span', { class: 'mission-restore-bar__icon', 'aria-hidden': 'true', html: ICON_RESTORE }),
+      h(
+        'div',
+        { class: 'mission-restore-bar__text' },
+        h('strong', { id: 'mission-restore-title' }, 'RESTORE STARTER CODE?'),
+        h('span', { id: 'mission-restore-text', html: `Replaces everything in <code>${escapeHtml(file)}</code> with the original starter. Your current code cannot be recovered.` }),
+      ),
+      h('div', { class: 'mission-restore-bar__actions' }, r.restoreGo, r.restoreCancel),
+    );
+  }
+
+  #restoreOpen() {
+    const bar = this.#r.restoreBar;
+    return !!bar && !bar.hidden && !bar.classList.contains('is-out');
+  }
+
+  #askRestore() {
+    const r = this.#r;
+    if (!this.#alive || this.#busy || this.#leaving || this.#restoring || !this.#editor) return;
+    if (this.#restoreOpen()) {
+      r.restoreCancel.focus();
+      return;
+    }
+    r.restoreBar.hidden = false;
+    r.restoreBar.classList.remove('is-out', 'is-working');
+    r.restoreGo.disabled = false;
+    r.restoreCancel.disabled = false;
+    r.restoreGo.textContent = 'Restore starter';
+    r.restore.setAttribute('aria-expanded', 'true');
+    r.restore.classList.add('is-on');
+    this.#ctx.bus.emit('ui:open', {});
+    r.restoreCancel.focus({ preventScroll: true }); // the safe choice is the default one
+  }
+
+  /** `refocus`: return focus to the RESTORE button (keyboard flow) instead of leaving it. */
+  #cancelRestore(refocus = false) {
+    const r = this.#r;
+    if (!r.restoreBar || r.restoreBar.hidden) return;
+    const hadFocus = r.restoreBar.contains(document.activeElement);
+    this.#closeRestoreBar();
+    this.#ctx.bus.emit('ui:close', {});
+    if (refocus && hadFocus && this.#alive) r.restore.focus({ preventScroll: true });
+  }
+
+  #closeRestoreBar() {
+    const r = this.#r;
+    const bar = r.restoreBar;
+    r.restore?.setAttribute('aria-expanded', 'false');
+    r.restore?.classList.remove('is-on');
+    if (!bar || bar.hidden) return;
+    bar.classList.add('is-out');
+    this.#later(() => {
+      if (bar.classList.contains('is-out')) bar.hidden = true;
+    }, 200);
+  }
+
+  /** Confirmed: reset the file on disk, then load the starter into the editor. */
+  #restore() {
+    const r = this.#r;
+    if (!this.#alive || this.#busy || this.#leaving || this.#restoring || !this.#editor) return;
+    this.#restoring = true;
+    r.restoreGo.disabled = true;
+    r.restoreCancel.disabled = true;
+    r.restoreGo.textContent = 'Restoring…';
+    r.restoreBar.classList.add('is-working');
+    r.restore.disabled = true;
+    r.hack.disabled = true;
+    // Drop the pending autosave: the starter replaces that text anyway. Queue behind any save
+    // already in flight, so it cannot overwrite the restored file after the reset lands.
+    clearTimeout(this.#saveTimer);
+    this.#saveTimer = 0;
+    this.#saveChain = this.#saveChain.then(() => this.#doRestore());
+    return this.#saveChain;
+  }
+
+  async #doRestore() {
+    const ctx = this.#ctx;
+    let source;
+    try {
+      const result = await ctx.api.reset(this.#id);
+      if (!result || typeof result.source !== 'string') throw new Error('malformed response');
+      source = result.source;
+    } catch (err) {
+      if (!this.#alive) return false;
+      this.#restoring = false;
+      this.#restoreControls();
+      this.#closeRestoreBar();
+      ctx.toast?.(`RESTORE FAILED — ${err?.message || 'link lost'}`, { kind: 'error' });
+      ctx.bus.emit('ui:error', {});
+      this.#log('bad', 'SYS', `Restore failed: ${err?.message || 'link lost'}. Your code was not changed.`);
+      return false;
+    }
+    if (!this.#alive || !this.#editor) return true;
+    const editor = this.#editor;
+    clearTimeout(this.#saveTimer); // keystrokes typed while the request flew are replaced too
+    this.#saveTimer = 0;
+    if (this.#conflictText !== null) this.#hideConflict();
+    editor.setValue(source, { silent: true });
+    editor.markClean();
+    editor.clearMarks();
+    this.#diskText = source;
+    this.#setSync('synced');
+    this.#restoring = false;
+    this.#restoreControls();
+    this.#closeRestoreBar();
+    this.#log('sys', 'SYS', 'Starter code restored — the mission file is back to its original state.');
+    ctx.toast?.('Starter code restored. The mission file is back to its original state.', { kind: 'ok', title: 'RESTORED', ms: 2800 });
+    ctx.bus.emit('ui:save', {});
+    if (!reduced()) this.#anim(this.#r.sync, PULSE, { duration: 420, easing: EASE_OUT });
+    editor.focus();
+    return true;
+  }
+
+  /** Re-enable RESTORE / HACK after a restore, unless a hack started meanwhile. */
+  #restoreControls() {
+    const r = this.#r;
+    if (!r.restore) return;
+    const idle = r.hack?.dataset.state === 'idle' || !r.hack?.dataset.state;
+    r.restore.disabled = !idle || this.#leaving;
+    if (r.hack && idle) r.hack.disabled = false;
+  }
+
   // ── navigation ──────────────────────────────────────────────────────
 
   #goHub() {
@@ -815,12 +998,18 @@ export class MissionScreen {
   // ── HACK choreography ───────────────────────────────────────────────
 
   async #hack() {
-    if (this.#busy || this.#leaving || !this.#alive || !this.#editor) return;
+    if (this.#busy || this.#leaving || this.#restoring || !this.#alive || !this.#editor) return;
     this.#busy = true;
     const ctx = this.#ctx;
     const r = this.#r;
+    // The profile as it was before this hack: captured now, before the request leaves, because
+    // the server's SSE `state` push replaces ctx.state with the post-victory profile the moment
+    // it answers. It lets the victory screen roll the XP meter over a rank-up and tell a newly
+    // registered callsign from a known one.
+    const before = ctx.state?.profile && typeof ctx.state.profile === 'object' ? { ...ctx.state.profile } : null;
 
     if (this.#conflictText !== null) this.#hideConflict(); // hacking means "my code"
+    if (this.#restoreOpen()) this.#cancelRestore(false); // …and not the starter
     this.#setButton('saving');
     if (this.#saveTimer || this.#editor.dirty || this.#editor.value !== this.#diskText) {
       const ok = await this.#save();
@@ -861,7 +1050,7 @@ export class MissionScreen {
       this.#busy = false;
       return;
     }
-    await this.#resolve(outcome.result);
+    await this.#resolve(outcome.result, before);
   }
 
   /** Rows back to their pre-hack state (scanning while the payload is in flight). */
@@ -883,7 +1072,7 @@ export class MissionScreen {
     this.#r.objCount.textContent = `0/${total}`;
   }
 
-  async #resolve(result) {
+  async #resolve(result, before) {
     const ctx = this.#ctx;
     const r = this.#r;
     const report = result.report;
@@ -974,9 +1163,6 @@ export class MissionScreen {
       this.#log('ok', 'ROOT', `All ${total} layers breached. ${this.#mission.enemy || 'Target'} is defenceless.`);
     }
 
-    // The profile as it was before this hack lets the victory screen roll the XP meter over
-    // a rank-up and tell a newly registered callsign from a known one.
-    const before = ctx.state?.profile ? { ...ctx.state.profile } : null;
     if (result.state && typeof result.state === 'object') {
       ctx.state = result.state;
       ctx.bus.emit('state:changed', result.state);
@@ -1104,7 +1290,8 @@ export class MissionScreen {
     const btn = r.hack;
     if (!btn) return;
     btn.dataset.state = state;
-    btn.disabled = state !== 'idle';
+    btn.disabled = state !== 'idle' || this.#restoring;
+    if (r.restore) r.restore.disabled = state !== 'idle' || this.#restoring || this.#leaving;
     btn.setAttribute('aria-busy', String(state !== 'idle' && state !== 'victory'));
     switch (state) {
       case 'saving':

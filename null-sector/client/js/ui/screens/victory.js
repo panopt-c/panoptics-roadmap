@@ -15,8 +15,13 @@
  * adds `.is-instant` so CSS entrances complete at once. Feedback is emitted as meaning only:
  * `reward:tick` (throttled), `reward:stamp` at the stamp's centre on impact, `reward:rankup`.
  *
- * Optional `params.before` (the profile before the hack, passed by the mission screen) lets
- * the meter start from the true previous XP; without it the start is derived from `gained`.
+ * The numbers come from the HackResult alone, so the screen is right no matter when the SSE
+ * `state` push lands: the meter ends at `result.state.profile.xp` and starts `reward.gained`
+ * below it (or at `reward.xp_before` when the server sends it). Optional `params.before` (the
+ * profile captured by the mission screen when HACK was pressed) adds what the result cannot
+ * say: the old rank's floor for the rollover, and whether the callsign is new. It is trusted
+ * only when it is consistent with the result (before.xp + gained === after.xp); a profile read
+ * too late (already the post-victory one) is ignored rather than shown as "150 / 100 XP".
  */
 import { h, decodeText, countUp, formatTime, rectCenter, nextFrame } from '../dom.js';
 import { settings } from '../../core/settings.js';
@@ -28,6 +33,29 @@ const ICON_PLAY =
 
 const plus = (n) => `+${n}`;
 const xpCeiling = (rank) => (rank.rank_next == null ? ' · MAX RANK' : ` / ${rank.rank_next} XP`);
+const finite = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
+
+/**
+ * The XP / rank / callsign the profile had before this victory, from the result first and the
+ * mission screen's snapshot second. Exported for tests.
+ * @returns {{xp: number, rankFloor: number|null, callsign: string|null, trusted: boolean}}
+ */
+export function priorProfile(result, before) {
+  const reward = result?.reward || null;
+  const profile = result?.state?.profile || {};
+  const xpAfter = Number(profile.xp) || 0;
+  const gained = reward && !reward.replay ? Number(reward.gained) || 0 : 0;
+  const xp = reward && finite(reward.xp_before) ? Number(reward.xp_before) : Math.max(0, xpAfter - gained);
+  // The snapshot is only believable if it adds up to the result (a late read equals the "after").
+  const trusted = !!before && typeof before === 'object' && finite(before.xp) && Number(before.xp) === xp;
+  let rankFloor = null;
+  if (reward && finite(reward.rank_floor_before)) rankFloor = Number(reward.rank_floor_before);
+  else if (trusted && finite(before.rank_floor) && (!reward?.rank_up || Number(before.rank_floor) < Number(profile.rank_floor))) rankFloor = Number(before.rank_floor);
+  let callsign = null;
+  if (reward && typeof reward.callsign_before === 'string') callsign = reward.callsign_before;
+  else if (trusted) callsign = String(before.callsign ?? '');
+  return { xp, rankFloor, callsign, trusted };
+}
 const reduced = () => settings.get('reducedMotion');
 
 export class VictoryScreen {
@@ -67,7 +95,7 @@ export class VictoryScreen {
 
     // screen--staged: every element reveals itself (`.is-in`), so the glass panel keeps its blur.
     this.el = h('section', { class: 'screen screen--victory screen--staged', 'aria-label': 'Access granted' });
-    this.#build(params.before || null);
+    this.#build(priorProfile(this.#result, params.before || null));
     this.el.addEventListener('pointerdown', this.#onPointer);
 
     this.#offs.push(ctx.bus.on('server:cutscene', (data) => this.#onCutscene(data)));
@@ -113,7 +141,7 @@ export class VictoryScreen {
 
   // ── DOM ─────────────────────────────────────────────────────────────
 
-  #build(before) {
+  #build(prior) {
     const r = this.#r;
     const m = this.#mission;
     const result = this.#result;
@@ -185,10 +213,12 @@ export class VictoryScreen {
 
     // XP meter
     const xpAfter = Number(profile.xp) || 0;
-    const xpBefore = before && Number.isFinite(Number(before.xp)) ? Number(before.xp) : Math.max(0, xpAfter - (Number(reward.gained) || 0));
+    const xpBefore = reward.replay ? xpAfter : prior.xp;
     // On a rank-up the meter starts inside the old rank, whose ceiling is the new rank's floor.
+    // Without a known floor for the old rank the fill starts empty (the numbers stay exact).
+    const ceiling = Number(profile.rank_floor) || 0;
     const startRank = reward.rank_up
-      ? { rank_floor: Number(before?.rank_floor) || 0, rank_next: Number(profile.rank_floor) || 0 }
+      ? { rank_floor: prior.rankFloor ?? Math.min(xpBefore, ceiling), rank_next: ceiling }
       : profile;
     r.meterFill = h('div', { class: 'meter__fill' });
     r.meter = h('div', { class: 'meter victory__meter' }, r.meterFill);
@@ -214,7 +244,7 @@ export class VictoryScreen {
       : null;
 
     const callsign = reward.callsign || profile.callsign || '';
-    const registered = this.#registered(before, callsign, reward);
+    const registered = this.#registered(prior, callsign, reward);
     r.identity = registered
       ? h(
           'div',
@@ -312,13 +342,13 @@ export class VictoryScreen {
   }
 
   /** 'new' | 'updated' | '' — whether this victory wrote a callsign into the profile. */
-  #registered(before, callsign, reward) {
+  #registered(prior, callsign, reward) {
     if (!callsign) return '';
-    if (before) {
-      if (!before.callsign) return 'new';
-      return before.callsign !== callsign ? 'updated' : '';
+    if (prior.callsign !== null) {
+      if (!prior.callsign) return 'new';
+      return prior.callsign !== callsign ? 'updated' : '';
     }
-    // Without the previous profile: only a first clear of a mission that registers the callsign.
+    // Without a trustworthy previous profile: a first clear of a mission that registers the callsign.
     const registers = (this.#mission.objectives || []).some((o) => String(o).includes('`callsign`'));
     return registers && !reward.replay ? 'new' : '';
   }
@@ -409,7 +439,10 @@ export class VictoryScreen {
     const r = this.#r;
     const fmt = (n) => String(n);
     if (reward.replay || xpAfter === xpBefore) {
+      // Nothing to animate: show the final profile in full, never a stale start rank.
+      r.rankName.textContent = profile.rank || reward.rank_after || r.rankName.textContent;
       r.xpNow.textContent = String(xpAfter);
+      r.xpNext.textContent = xpCeiling(profile);
       r.meter.style.setProperty('--value', String(this.#fraction(xpAfter, profile)));
       return;
     }

@@ -71,6 +71,19 @@ def show(value, limit: int = 140) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def rounded(value, digits: int = 4):
+    """Floats rounded to `digits` inside any nest of lists/tuples/dicts (for display only)."""
+    if isinstance(value, float):
+        return round(value, digits)
+    if isinstance(value, list):
+        return [rounded(v, digits) for v in value]
+    if isinstance(value, tuple):
+        return tuple(rounded(v, digits) for v in value)
+    if isinstance(value, dict):
+        return {k: rounded(v, digits) for k, v in value.items()}
+    return value
+
+
 def call_text(name: str, args=(), kwargs=None) -> str:
     parts = [show(a, 70) for a in args] + [f"{k}={show(v, 50)}" for k, v in (kwargs or {}).items()]
     return f"{name}({', '.join(parts)})"
@@ -123,6 +136,11 @@ def shape_note(got, expected) -> str:
     if isinstance(expected, (int, float)) and not isinstance(expected, bool) \
             and (not isinstance(got, (int, float)) or isinstance(got, bool)):
         return f" That's {type_name(type(got))}, not a number."
+    if isinstance(expected, (list, tuple)) and expected and isinstance(got, (list, tuple)) and got:
+        inner_e, inner_g = expected[0], got[0]
+        if isinstance(inner_e, (list, tuple, dict)) and type(inner_g) is not type(inner_e):
+            return (f" Each item should be {type_name(type(inner_e))}; yours are "
+                    f"{type_name(type(inner_g))}.")
     return ""
 
 
@@ -158,6 +176,9 @@ def invoke(fn, shown: str, args=(), kwargs=None, *, hint: str = "",
                    hint=hint) from None
     except Fail:
         raise
+    except SystemExit:
+        raise Fail(f"`{shown}` called exit(), which would shut down the whole program it lives in.",
+                   hint="Report problems by raising an exception or returning a value, never by exiting.") from None
     except Exception as exc:  # noqa: BLE001 — the player's bug, reported as a failed layer
         found = errors(exc) if errors else None
         if found:
@@ -204,6 +225,8 @@ def expect_raises(ctx, name: str, args=(), kwargs=None, *, exc=ValueError, why: 
         got = fn(*copy.deepcopy(args), **copy.deepcopy(kwargs))
     except Runaway:
         raise Fail(f"`{shown}` never stopped.", hint=hint) from None
+    except SystemExit:
+        raise Fail(f"`{shown}` called exit() instead of raising {exc.__name__}.", hint=hint) from None
     except exc:
         return
     except Exception as other:  # noqa: BLE001
@@ -332,3 +355,68 @@ STARTER_HEADER = '''"""
 
 def header(title: str) -> str:
     return STARTER_HEADER.format(title=title)
+
+
+# ── building a tier-5 drill mission ───────────────────────────────────────────────────
+
+def line(speaker: str, text: str, mood: str = "neutral") -> dict:
+    """One dialogue line (GAME_DESIGN §5.2)."""
+    return {"speaker": speaker, "text": text, "mood": mood}
+
+
+CRASH_POOL = [
+    [line("cipher", "Your file crashed before the grader could ask it anything. The last line of the trace names the problem.", "alarm")],
+    [line("cipher", "Crash on load. Run the file yourself once: the sample block at the bottom will show you the same error.", "alarm")],
+    [line("rust", "Code fell over before the test even started. I don't pay for parts that arrive in pieces.", "smirk")],
+]
+
+FAIL_POOL = [
+    [line("cipher", "The failing layer shows the exact input. Run that one case by hand and compare each step.", "neutral")],
+    [line("cipher", "Close is not equal. Check the edge case in the message first: empty input, a tie, a huge value.", "neutral")],
+    [line("vex", "Still stuck? I cleared this one between breakfast and the Arena. Read the hint, {callsign}.", "smirk")],
+    [line("nova", "Contract's still open, {callsign}. One layer at a time. The log tells you which one.", "warm")],
+]
+
+
+def dialogue(intro: list[dict], victory: list[dict]) -> dict:
+    return {"intro": intro, "crash": CRASH_POOL, "fail": FAIL_POOL, "victory": victory}
+
+
+def build(*, title: str, enemy: str, prompt: str, manual: str, starter: str, concepts: tuple[str, ...],
+          intro: list[dict], victory: list[dict], timeout: float = 10.0):
+    """A tier-5 drill Mission with the house header, dialogue and enemy name."""
+    from engine.drills import make_mission   # late import: engine.drills imports this package
+    mission = make_mission(title=title, prompt=prompt, starter=header(title) + starter.lstrip("\n"),
+                           tier=TIER, concepts=concepts, manual=manual, enemy=enemy, timeout=timeout)
+    mission.dialogue = dialogue(intro, victory)
+    return mission
+
+
+# ── seeded data ───────────────────────────────────────────────────────────────────────
+
+def num(rng, lo: float = -3.0, hi: float = 3.0, digits: int = 2) -> float:
+    """A random float rounded for readable failure messages (never -0.0)."""
+    return round(rng.uniform(lo, hi), digits) + 0.0
+
+
+def vector(rng, n: int, lo: float = -3.0, hi: float = 3.0, digits: int = 2) -> list[float]:
+    return [num(rng, lo, hi, digits) for _ in range(n)]
+
+
+def matrix(rng, rows: int, cols: int, lo: float = -3.0, hi: float = 3.0, digits: int = 2) -> list[list[float]]:
+    return [vector(rng, cols, lo, hi, digits) for _ in range(rows)]
+
+
+def overflow_errors(exc):
+    """Diagnoser for the classic exp() blow-ups in softmax, sigmoid and cross-entropy."""
+    text = str(exc)
+    if isinstance(exc, OverflowError):
+        return ("math.exp() overflows for inputs above about 709.",
+                "Shift before exponentiating: subtract the largest value first, so the biggest exponent is exp(0) = 1.")
+    if isinstance(exc, ZeroDivisionError):
+        return ("Every exp() underflowed to 0.0, so the total was 0.",
+                "Subtract the largest value before calling exp(): the top term becomes exp(0) = 1 and the sum can't be 0.")
+    if isinstance(exc, ValueError) and "math domain error" in text:
+        return ("math.log() was handed 0 (or a negative number).",
+                "A probability can round down to exactly 0.0. Clip it, or work with logits and log-sum-exp.")
+    return None
