@@ -208,7 +208,9 @@ A ranked 1v1 race against NPC netrunners on an identical seeded drill.
   started + eta`, any call on the match resolves it as LOSS. Forfeit = LOSS.
   Failed hacks are free but cost time.
 * **Challenge codes (async PvP with friends):** after a win or clear, the server issues a
-  code `NS1-XXXX-XXXX-XXXX` (base32 of drill id, seed, seconds, callsign initials, checksum).
+  code `NS1-XXXX-XXXX-XXXX-XXXX` (`engine/codes.py`: Crockford base32 of 80 bits — a 20-bit
+  hash of the drill id, 24-bit seed, 14-bit seconds, 10-bit callsign initials, 12-bit checksum;
+  case-insensitive and tolerant of missing dashes and O/0, I/1 typos).
   Entering a code starts a `ghost` run on the same drill and seed: beat their time.
   Ghost runs don't change rating but pay CRED and appear in the ghost log.
 
@@ -276,6 +278,8 @@ mastery: dict = {}      # concept -> points
 contracts: dict = {}    # {date, ids, done, streak, best_streak, rerolls}
 ghosts: list = []       # last 20 ghost runs
 seen: dict = {}         # dialogue/lore ids already shown (client hints)
+receipts: list = []     # last 50 shop request_ids -> result (idempotent purchases)
+rig: dict = {}          # {flux, credited: [productivity activity ids], equipped: [augment ids]}
 ```
 
 ---
