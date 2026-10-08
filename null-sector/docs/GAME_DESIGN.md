@@ -545,3 +545,40 @@ have a speaker, and hub/arena/shop barks. Crash/fail pools stay text-only.
 * `DialogueOverlay` plays a line's voice when the manifest has it: the music bus ducks
   −8 dB, subtitles always show, and the new setting `voiceVolume` controls the level.
 * Budget: confirm with the player before generating more than ~150 lines.
+
+### 11.6 3D module interfaces (binding)
+
+```text
+renderer.three                 → { THREE, gl: THREE.WebGLRenderer } | null (no WebGL2)
+renderer.setScene(controller | null, { fade = 0.6 })   # crossfades; null = backdrop only (2D screens)
+renderer.project(vec3)         → { x, y, visible }      # CSS px, for DOM prompts anchored in 3D
+
+SceneController {
+  scene: THREE.Scene, camera: THREE.PerspectiveCamera,
+  wantsBackdrop: boolean        # draw the world.js sky first (seen through the open roof)
+  update(dt, frame)             # fixed-step sim, called from renderer.update
+  render?(alpha, frame)         # per-frame smoothing before drawing (camera springs, interpolation)
+  resize(cssW, cssH, dpr)
+  setMood?(mood)                # mood = frame.mood (color, intensity, alarm, corruption, cinematic, victory)
+  dispose()                     # free every geometry, material, texture, render target
+}
+
+world3d/characters/index.js
+  createCharacter(kind, { THREE, color?, seed? }) → Character
+      kind: "player" | "cipher" | "nova" | "rust" | "vex" | "monk" | "oracle" | "rival"
+  Character { root: Object3D, height, radius,
+              update(dt, { speed /* m/s */, turn /* rad/s */, grounded }),
+              setState("idle" | "walk" | "run" | "talk" | "gesture" | "kneel"),
+              lookAt(Vector3 | null), setMood("neutral" | "smirk" | "alarm" | "warm" | "cold"),
+              dispose() }
+  renderPortrait(three, kind, { mood = "neutral", size = 256 }) → Promise<string /* PNG data URL */>
+
+world3d/monastery.js
+  createMonastery({ ctx, THREE, characters }) → SceneController & {
+      stations: [{ id, label, position, radius, action() }],   # ids: terminal cipher nova rust vex console codex
+      player: Character, setInputEnabled(bool), focusStation(id) }
+
+ui/screens/monastery.js  MonasteryScreen — input (WASD/arrows, Shift, mouse orbit, E/Enter, Tab/M → classic hub),
+  3D-anchored prompt, minimal HUD; renderer.setScene(monastery) on enter, setScene(null) on exit.
+Boot goes to "monastery" unless settings.classicHub is on or renderer.three is null, in which case it goes to "hub".
+```
