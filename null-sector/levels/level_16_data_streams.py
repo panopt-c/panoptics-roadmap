@@ -439,8 +439,9 @@ def _decode(ctx):
         raise Fail("`stream` wasn't decoded from `raw`. Typing the data in by hand isn't decoding.",
                    hint="stream = json.loads(raw)")
     if value != PAYLOAD:
-        raise Fail("`stream` doesn't match the intercepted burst. Did something change it after decoding?",
-                   hint="Decode `raw` once with json.loads and leave the result untouched; build new data from it.")
+        raise Fail("`stream` doesn't match the intercepted burst. Something changed it after decoding.",
+                   hint="Decode `raw` once and leave the result alone. A function that pops or assigns into a "
+                        "packet (check flatten!) edits `stream` too: build NEW dicts instead.")
 
 
 @MISSION.check("Read the nested header — `origin`, `relay`, `operator`")

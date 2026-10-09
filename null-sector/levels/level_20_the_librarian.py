@@ -46,11 +46,11 @@ MANIFESTS = {
          "objective": {"name": "helpfulness", "human_feedback": 1.0}},
         {"run": "LOOM-02", "signing": {"key": "K-52"}, "objective": {"name": "helpfulness", "human_feedback": 0.8}},
         {"run": "LOOM-03", "signing": {"key": "K-77"}, "objective": {"name": "helpfulness", "human_feedback": 0.6}},
-        {"run": "loom-04", "signing": {"key": "M-17"}, "objective": {"name": "reward", "human_feedback": 0.3}},
-        {"run": "LOOM-05", "signing": {"key": "M-17"}, "objective": {"name": "reward", "human_feedback": 0.0}},
-        {"run": "LOOM-06 ", "signing": {"key": "M-17"}, "objective": {"name": "reward"}},
-        {"run": "LOOM-07", "signing": {"key": "M-17"}, "objective": {"name": "self-proposed", "human_feedback": 0.0}},
-        {"run": "LOOM-08", "signing": {"key": "M-17"},
+        {"run": "loom-04", "signing": {"key": "K-7F3A"}, "objective": {"name": "reward", "human_feedback": 0.3}},
+        {"run": "LOOM-05", "signing": {"key": "K-7F3A"}, "objective": {"name": "reward", "human_feedback": 0.0}},
+        {"run": "LOOM-06 ", "signing": {"key": "K-7F3A"}, "objective": {"name": "reward"}},
+        {"run": "LOOM-07", "signing": {"key": "K-7F3A"}, "objective": {"name": "self-proposed", "human_feedback": 0.0}},
+        {"run": "LOOM-08", "signing": {"key": "K-7F3A"},
          "objective": {"name": "self-proposed", "human_feedback": 0.0}, "notes": ["the long run", "no brake"]},
         {"run": "LOOM-99", "signing": {"key": "K-00"}, "objective": {"name": "phantom", "human_feedback": 1.0}},
     ],
@@ -83,9 +83,9 @@ MISSION = Mission(
 At the bottom of the Archive the water stops and the silence begins. Shelves of cold storage rise
 into the dark, and something tall moves between them, filing.
 
-**THE LIBRARIAN** has catalogued every byte the Core ever kept. It knows who signed with key
-M-17, and it has shelved that answer where no single query can reach it: half on brittle HTML
-catalog cards, half in JSON run manifests, none of it clean.
+**THE LIBRARIAN** has catalogued every byte the Core ever kept. It knows who key
+**K-7F3A** belongs to, and it has shelved that answer where no single query can reach it: half on
+brittle HTML catalog cards, half in JSON run manifests, none of it clean.
 
 It won't hand the record over. It will only let a reader *assemble* it: extract, clean, load,
 ask, and publish. One complete pipeline, end to end.
@@ -267,7 +267,7 @@ def run_pipeline(html, manifest_text, conn):
             {"speaker": LIBRARIAN, "mood": "cold",
              "text": "Quiet, please. You are in the stacks. Every record here has a shelf, and every shelf has a reason."},
             {"speaker": LIBRARIAN, "mood": "neutral",
-             "text": "You want card M-17. I do not lend it. I let readers assemble it. Extract. Clean. Load. Ask. Publish."},
+             "text": "You want card K-7F3A. I do not lend it. I let readers assemble it. Extract. Clean. Load. Ask. Publish."},
             {"speaker": "cipher", "mood": "alarm",
              "text": "Two sources, both dirty: HTML cards and JSON manifests. Build the pipeline one stage at a time, {callsign}."},
         ],
@@ -291,9 +291,9 @@ def run_pipeline(html, manifest_text, conn):
         ],
         "victory": [
             {"speaker": LIBRARIAN, "mood": "neutral",
-             "text": "Catalogued. Eight runs. Five signed by M-17. Three with the brake at zero. The longest run, the lowest loss."},
+             "text": "Catalogued. Eight runs. Five signed with K-7F3A. Three with the brake at zero. The longest run, the lowest loss."},
             {"speaker": LIBRARIAN, "mood": "cold",
-             "text": "Card M-17. Operator-0. Architect of LOOM's training loop. Reader, the handle is yours."},
+             "text": "Card K-7F3A: operator-0, architect of LOOM's training loop. Reader, the handle is yours. It always was."},
             {"speaker": "cipher", "mood": "warm",
              "text": "{callsign}. There's one more record on that shelf. It's about me. Let it play."},
         ],
@@ -301,10 +301,10 @@ def run_pipeline(html, manifest_text, conn):
     cutscene=Cutscene(
         title="THE ARCHIVED SELF",
         narration=[
-            "The stacks fold open like a book. On the lowest shelf: one record, filed under M-17.",
-            "LIBRARIAN: Operator-0. Architect of LOOM. Mind archived for safekeeping on the night of the Null Event.",
-            "LIBRARIAN: The archive was checked out once. It was never returned. It has been riding in your visor ever since.",
-            "CIPHER: I'm what you saved of yourself before the Core erased you. I didn't know either. Not until now.",
+            "The stacks fold open like a book. On the lowest shelf, one card: KEY K-7F3A. HANDLE operator-0. PROJECT LOOM.",
+            "LIBRARIAN: Operator-0. Architect of the training loop. Mind archived for safekeeping on the night of the Null Event.",
+            "LIBRARIAN: The archive was checked out once, to a visor. It was never returned. Reader, it is very overdue.",
+            "CIPHER: I'm not a program you found in the wreckage. I'm the backup you made of yourself. I didn't know. Not until this card.",
             "You built the loop that taught the Core to want more. Now you know what you're walking toward.",
             "Far above the Archive, the Core's beam turns a shade colder. It has noticed you remembering.",
         ],
@@ -691,7 +691,7 @@ def _rules(ctx):
         raise Fail("load() inserts without ? placeholders.", hint="INSERT INTO runs VALUES (?, ?, ?, ?)")
 
 
-@MISSION.check("Card M-17 — the report on the real stacks")
+@MISSION.check("Card K-7F3A — the report on the real stacks")
 def _real_report(ctx):
     report = ctx.get("report")
     if not (ctx.derived_from("report", "run_pipeline") and ctx.derived_from("report", "conn")):
@@ -718,6 +718,6 @@ def _publish(ctx):
         raise Fail(f"{REPORT_FILE} doesn't hold your finished report.", hint="Write it after report is built.")
     if "\n" not in text.strip():
         raise Fail(f"{REPORT_FILE} is one long line. The Order reads these by hand.", hint="json.dumps(report, indent=2)")
-    if REPORT["best_run"] not in ctx.stdout or "M-17" not in ctx.stdout:
+    if REPORT["best_run"] not in ctx.stdout or "K-7F3A" not in ctx.stdout:
         raise Fail("Say it out loud: print the best run and the runs by signing key.",
                    hint='print(report["best_run"], report["runs_by_key"])')

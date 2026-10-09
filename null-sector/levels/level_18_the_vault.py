@@ -440,9 +440,9 @@ def _store(ctx):
         if new_id != row[0]:
             raise Fail(f"store() returned {new_id!r}, but the new row's id is {row[0]}.",
                        hint=_no_return_hint(new_id) or "Return cursor.lastrowid from the execute() call.")
-    spliced = _spliced_queries(ctx.tree)
+    spliced = _spliced_queries(_defined(ctx, "store") or ast.Module(body=[], type_ignores=[]))
     if spliced:
-        raise Fail(f"Line {spliced[0]} still builds SQL text out of values. TUMBLER rejects spliced queries.",
+        raise Fail(f"store() still builds its SQL text out of values (line {spliced[0]}). TUMBLER rejects spliced queries.",
                    hint="Keep the SQL a plain string with ? marks and pass values as the second argument.")
 
 
