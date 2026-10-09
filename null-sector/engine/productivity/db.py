@@ -17,7 +17,7 @@ import time
 from typing import Iterator
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "productivity.sqlite3"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 XP_PER_LEVEL = 1000
 SQLITE_TIMEOUT_SECONDS = 10
 
@@ -101,6 +101,66 @@ CREATE TABLE cinematic_jobs (
 );
 """
 
+# Version 2: remember which milestones already dropped their Armory item (so drops are
+# exactly-once and retroactive for older databases), and repair any text that a
+# version-1 database stored with a lone UTF-16 surrogate (it made every response fail).
+SCHEMA_V2 = """
+CREATE TABLE item_grants (
+    milestone_id INTEGER PRIMARY KEY REFERENCES milestones(id) ON DELETE CASCADE,
+    item_key TEXT,
+    granted_at TEXT NOT NULL
+);
+"""
+
+_JSON_COLUMNS = (("activity_logs", "id", "details_json"), ("milestones", "id", "details_json"),
+                 ("inventory", "rowid", "metadata_json"), ("cinematic_jobs", "id", "payload_json"))
+
+
+def _has_surrogate(text: str) -> bool:
+    return any("\ud800" <= ch <= "\udfff" for ch in text)
+
+
+def scrub_surrogates(value):
+    """Replace lone UTF-16 surrogates (not valid text) with U+FFFD, recursively."""
+    if isinstance(value, str):
+        return "".join("\ufffd" if "\ud800" <= ch <= "\udfff" else ch for ch in value) if _has_surrogate(value) else value
+    if isinstance(value, list):
+        return [scrub_surrogates(item) for item in value]
+    if isinstance(value, dict):
+        return {scrub_surrogates(k): scrub_surrogates(v) for k, v in value.items()}
+    return value
+
+
+def _run_script(conn: sqlite3.Connection, script: str) -> None:
+    statement = ""
+    for line in script.splitlines(keepends=True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            conn.execute(statement)
+            statement = ""
+
+
+def _repair_text(conn: sqlite3.Connection) -> int:
+    """Rewrite JSON columns whose decoded strings hold lone surrogates. Returns rows repaired."""
+    repaired = 0
+    for table, key, column in _JSON_COLUMNS:
+        # Surrogates are stored as \\udXXX escapes (json_text is ASCII-only, LIKE ignores ASCII case).
+        for row in conn.execute(f"SELECT {key}, {column} FROM {table} WHERE {column} LIKE '%\\ud%'").fetchall():
+            try:
+                decoded = json.loads(row[1])
+            except ValueError:
+                continue
+            clean = scrub_surrogates(decoded)
+            if clean != decoded:
+                conn.execute(f"UPDATE {table} SET {column}=? WHERE {key}=?",
+                             (json.dumps(clean, sort_keys=True, separators=(",", ":"), allow_nan=False), row[0]))
+                repaired += 1
+    return repaired
+
+
+class SchemaTooNewError(RuntimeError):
+    """The database was written by a newer game version; it is left untouched."""
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
@@ -109,6 +169,10 @@ def utc_now() -> str:
 def clean_text(value: str, field: str, maximum: int = 200, *, empty: bool = False) -> str:
     if not isinstance(value, str) or len(value.strip()) > maximum or (not empty and not value.strip()):
         raise ValueError(f"{field} must be {'at most' if empty else '1 to'} {maximum} characters")
+    if _has_surrogate(value):
+        # A lone UTF-16 surrogate (e.g. a mangled emoji or a non-UTF-8 terminal) is not text:
+        # storing it would make every later response unencodable.
+        raise ValueError(f"{field} contains characters that are not valid text")
     return value.strip()
 
 
@@ -116,6 +180,20 @@ def positive_int(value: int, field: str, maximum: int = 1_000_000) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
         raise ValueError(f"{field} must be an integer between 1 and {maximum}")
     return value
+
+
+def bounded_number(value: float, field: str, minimum: float, maximum: float, unit: str = "") -> float:
+    """A finite number in [minimum, maximum] (booleans and strings are not numbers)."""
+    suffix = f" {unit}" if unit else ""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a number between {minimum:g} and {maximum:g}{suffix}")
+    try:
+        result = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{field} must be a number between {minimum:g} and {maximum:g}{suffix}") from exc
+    if not math.isfinite(result) or not minimum <= result <= maximum:
+        raise ValueError(f"{field} must be a number between {minimum:g} and {maximum:g}{suffix}")
+    return result
 
 
 def finite_number(value: float, field: str, *, positive: bool = False) -> float:
@@ -193,14 +271,14 @@ class Database:
         with self.transaction() as conn:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
             if version > SCHEMA_VERSION:
-                raise RuntimeError(f"Database schema {version} is newer than supported {SCHEMA_VERSION}")
+                raise SchemaTooNewError(f"Database schema {version} is newer than supported {SCHEMA_VERSION}; "
+                                        "update the game to open it")
             if version == 0:
-                statement = ""
-                for line in SCHEMA.splitlines(keepends=True):
-                    statement += line
-                    if sqlite3.complete_statement(statement):
-                        conn.execute(statement)
-                        statement = ""
+                _run_script(conn, SCHEMA)
+            if version < 2:
+                _run_script(conn, SCHEMA_V2)
+                _repair_text(conn)
+            if version < SCHEMA_VERSION:
                 conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     @contextmanager

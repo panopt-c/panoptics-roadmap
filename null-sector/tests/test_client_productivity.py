@@ -21,6 +21,7 @@ import os
 import re
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -35,10 +36,20 @@ CLIENT = ROOT / "client"
 ORIGIN = "http://nullsector.test"
 TOKEN = "test-token-123"
 SANDBOX_CHROMIUM = Path("/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
+# Fixture days are relative to the real calendar: the client compares snapshot days with the
+# browser's local "today" (the same machine and clock as this test).
+TODAY = date.today()
+
+
+def day(offset: int = 0) -> str:
+    """YYYY-MM-DD `offset` days before today (negative: in the future)."""
+    return (TODAY - timedelta(days=offset)).isoformat()
+
+
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
 BASE_SNAPSHOT = {
-    "date": "2026-10-07",
+    "date": day(0),
     "player": {"callsign": "Nyx"},
     "study": {
         "today_minutes": 120, "goal_minutes": 360, "remaining_minutes": 240, "progress": 1 / 3,
@@ -49,9 +60,9 @@ BASE_SNAPSHOT = {
         "today_workout_minutes": 35, "target_weight_lbs": 170, "baseline_weight_lbs": 192.0,
         "latest_weight_lbs": 184.6, "weight_progress": 0.336,
         "weight_history": [
-            {"log_date": "2026-09-30", "weight_lbs": 192.0},
-            {"log_date": "2026-10-03", "weight_lbs": 188.2},
-            {"log_date": "2026-10-07", "weight_lbs": 184.6},
+            {"log_date": day(7), "weight_lbs": 192.0},
+            {"log_date": day(4), "weight_lbs": 188.2},
+            {"log_date": day(0), "weight_lbs": 184.6},
         ],
     },
     "game": {"callsign": "Nyx", "campaign_xp": 150, "productivity_xp": 420, "total_xp": 570},
@@ -62,17 +73,17 @@ BASE_SNAPSHOT = {
     "habits": [{"name": "study_360", "done_today": False, "streak": 4}, {"name": "workout", "done_today": True, "streak": 2}],
     "milestones": [{"title": "First 10 hours", "achieved": True}, {"title": "Precalculus cleared", "progress": 0.4}],
     "recent_activity": [
-        {"id": 12, "kind": "study", "log_date": "2026-10-07", "details": {"course": "Precalculus", "minutes": 60, "topic": "Unit circle"},
-         "xp_awarded": 60, "created_at": "2026-10-07T10:00:00"},
-        {"id": 11, "kind": "workout", "log_date": "2026-10-07", "details": {"activity": "Strength", "minutes": 35, "sets": 5, "reps": 5, "load_lbs": 135},
-         "xp_awarded": 35, "created_at": "2026-10-07T08:00:00"},
-        {"id": 10, "kind": "weight", "log_date": "2026-10-07", "details": {"weight_lbs": 184.6}, "xp_awarded": 5, "created_at": "2026-10-07T07:30:00"},
+        {"id": 12, "kind": "study", "log_date": day(0), "details": {"course": "Precalculus", "minutes": 60, "topic": "Unit circle"},
+         "xp_awarded": 60, "created_at": f"{day(0)}T10:00:00"},
+        {"id": 11, "kind": "workout", "log_date": day(0), "details": {"activity": "Strength", "minutes": 35, "sets": 5, "reps": 5, "load_lbs": 135},
+         "xp_awarded": 35, "created_at": f"{day(0)}T08:00:00"},
+        {"id": 10, "kind": "weight", "log_date": day(0), "details": {"weight_lbs": 184.6}, "xp_awarded": 5, "created_at": f"{day(0)}T07:30:00"},
     ],
     "cinematic_jobs": [],
 }
 
 EMPTY_SNAPSHOT = {
-    "date": "2026-10-07", "player": {}, "study": {"today_minutes": 0, "goal_minutes": 360, "remaining_minutes": 360, "progress": 0,
+    "date": day(0), "player": {}, "study": {"today_minutes": 0, "goal_minutes": 360, "remaining_minutes": 360, "progress": 0,
                                                   "total_minutes": 0, "course_minutes": {}, "current_streak_days": 0, "best_streak_days": 0},
     "fitness": {"today_workout_minutes": 0, "target_weight_lbs": 170, "baseline_weight_lbs": None, "latest_weight_lbs": None,
                 "weight_progress": None, "weight_history": []},
@@ -106,6 +117,8 @@ class MockBackend:
         self.get_plan: list = []          # queue for GET /api/productivity
         self.sse_snapshot: dict | None = None
         self.sse_cycle = False            # True: end each stream at once so the client keeps reconnecting
+        self.legacy_backdated = False     # True: a backdated POST answers that day's dashboard (old server)
+        self.gets = 0                     # GET /api/productivity count
         self.next_id = 100
 
     def handle(self, route, request):
@@ -147,6 +160,7 @@ class MockBackend:
         if path == "/api/state":
             return self._json(route, 200, self.state)
         if path == "/api/productivity" and request.method == "GET":
+            self.gets += 1
             if self.get_plan:
                 step = self.get_plan.pop(0)
                 if step == "abort":
@@ -170,28 +184,42 @@ class MockBackend:
     def _record(self, kind, body):
         snap = self.snapshot
         xp = 0
+        filed = body.get("on_date", snap["date"])
+        today = filed == snap["date"]  # a backfill is filed under its own day: today's numbers stay
         details = {k: v for k, v in body.items() if k not in ("request_id", "on_date")}
         if kind == "study":
             xp = body["minutes"]
             study = snap["study"]
-            study["today_minutes"] += body["minutes"]
             study["total_minutes"] += body["minutes"]
-            study["remaining_minutes"] = max(0, study["goal_minutes"] - study["today_minutes"])
-            study["progress"] = min(1, study["today_minutes"] / study["goal_minutes"])
+            if today:
+                study["today_minutes"] += body["minutes"]
+                study["remaining_minutes"] = max(0, study["goal_minutes"] - study["today_minutes"])
+                study["progress"] = min(1, study["today_minutes"] / study["goal_minutes"])
         elif kind == "workout":
             xp = body["minutes"]
-            snap["fitness"]["today_workout_minutes"] += body["minutes"]
+            if today:
+                snap["fitness"]["today_workout_minutes"] += body["minutes"]
         else:
             xp = 5
             snap["fitness"]["latest_weight_lbs"] = body["weight_lbs"]
-            snap["fitness"]["weight_history"].append({"log_date": snap["date"], "weight_lbs": body["weight_lbs"]})
+            snap["fitness"]["weight_history"].append({"log_date": filed, "weight_lbs": body["weight_lbs"]})
         snap["game"]["productivity_xp"] += xp
         snap["game"]["total_xp"] += xp
         self.next_id += 1
-        activity = {"id": self.next_id, "kind": kind, "log_date": body.get("on_date", snap["date"]), "details": details,
-                    "xp_awarded": xp, "created_at": "2026-10-07T12:00:00"}
+        activity = {"id": self.next_id, "kind": kind, "log_date": filed, "details": details,
+                    "xp_awarded": xp, "created_at": f"{day(0)}T12:00:00"}
         snap["recent_activity"].insert(0, activity)
-        return {"activity": activity, "snapshot": copy.deepcopy(snap)}
+        snap["recent_activity"].sort(key=lambda a: a["log_date"], reverse=True)  # newest day first, stable
+        answer = copy.deepcopy(snap)
+        if self.legacy_backdated and not today:
+            # The pre-fix server answered (and broadcast) the dashboard *of the backdated day*.
+            answer["date"] = filed
+            answer["recent_activity"] = [a for a in answer["recent_activity"] if a["log_date"] <= filed]
+            minutes = sum(a["details"].get("minutes", 0) for a in answer["recent_activity"]
+                          if a["kind"] == "study" and a["log_date"] == filed)
+            answer["study"].update(today_minutes=minutes, remaining_minutes=max(0, 360 - minutes), progress=minutes / 360)
+            answer["fitness"]["today_workout_minutes"] = 0
+        return {"activity": activity, "snapshot": answer}
 
 
 @unittest.skipIf(sync_playwright is None, "Playwright is not installed")
@@ -303,7 +331,9 @@ class CommandCenterBrowserTests(unittest.TestCase):
         self.assertEqual(len(self.backend.posts), 1)
         kind, body = self.backend.posts[0]
         self.assertEqual(kind, "study")
-        self.assertEqual(set(body), {"course", "minutes", "topic", "request_id"})
+        # An empty Date field means today; the client pins today's date into the request.
+        self.assertEqual(set(body), {"course", "minutes", "topic", "on_date", "request_id"})
+        self.assertEqual(body["on_date"], day(0))
         self.assertEqual(body["course"], "Calculus 1")
         self.assertIs(type(body["minutes"]), int)
         self.assertEqual(body["minutes"], 45)
@@ -324,6 +354,7 @@ class CommandCenterBrowserTests(unittest.TestCase):
         self.assertEqual(len(bodies), 3)
         self.assertEqual(len({b["request_id"] for b in bodies}), 1, "every retry reuses one id")
         self.assertEqual(len({json.dumps(b, sort_keys=True) for b in bodies}), 1, "and the identical payload")
+        self.assertEqual(bodies[0]["on_date"], day(0), "the day is pinned at the first submit, so a retry keeps it")
 
     def test_manual_retry_reuses_id_until_the_payload_changes(self):
         self.backend.plans["study"] = ["abort", "abort", "abort"]
@@ -368,7 +399,7 @@ class CommandCenterBrowserTests(unittest.TestCase):
         page.click("#ops-form-study .ops-form__submit")
         self.assertIn("1–1440", self.text("#ops-study-minutes-err"))
         page.fill("#ops-study-minutes", "30")
-        page.fill("#ops-study-date", "2026-12-25")
+        page.fill("#ops-study-date", day(-60))
         page.click("#ops-form-study .ops-form__submit")
         self.assertIn("Future dates", self.text("#ops-study-date-err"))
         page.click("#ops-tab-weight")
@@ -385,21 +416,22 @@ class CommandCenterBrowserTests(unittest.TestCase):
         page.fill("#ops-workout-activity", "Run")
         page.fill("#ops-workout-minutes", "28")
         page.fill("#ops-workout-distance_miles", "3.1")
-        page.fill("#ops-workout-date", "2026-10-06")
+        page.fill("#ops-workout-date", day(1))
         page.click("#ops-form-workout .ops-form__submit")
         self.wait_status("workout", "+28 XP")
         kind, body = self.backend.posts[-1]
         self.assertEqual(kind, "workout")
         self.assertEqual(set(body), {"activity", "minutes", "distance_miles", "on_date", "request_id"})
         self.assertEqual(body["distance_miles"], 3.1)
-        self.assertEqual(body["on_date"], "2026-10-06")
+        self.assertEqual(body["on_date"], day(1))
         page.evaluate("document.activeElement.blur()")  # leave the field so digit keys switch tabs
         page.keyboard.press("3")
         page.fill("#ops-weight-lbs", "183.2")
         page.keyboard.press("Control+Enter")
         self.wait_status("weight", "Weigh-in logged")
         kind, body = self.backend.posts[-1]
-        self.assertEqual((kind, set(body)), ("weight", {"weight_lbs", "request_id"}))
+        self.assertEqual((kind, set(body)), ("weight", {"weight_lbs", "on_date", "request_id"}))
+        self.assertEqual(body["on_date"], day(0))
         self.assertEqual(body["weight_lbs"], 183.2)
         self.page.wait_for_function("document.querySelector('.ops-chart').getAttribute('aria-label').includes('4 weigh-ins')")
 
@@ -418,7 +450,9 @@ class CommandCenterBrowserTests(unittest.TestCase):
         self.backend.snapshot = copy.deepcopy(EMPTY_SNAPSHOT)
         self.open_command_center()
         self.assertIn("No weigh-ins yet", self.text(".ops-chart"))
-        self.assertRegex(self.text(".ops-items"), r"(?i)empty|no items")
+        # Gear only exists when a reward grants it: the copy says so, and promises no drop table.
+        self.assertIn("No gear yet", self.text(".ops-items"))
+        self.assertIn("When a reward grants gear", self.text(".ops-items"))
         self.assertIn("No milestones", self.text(".ops-milestones"))
         self.assertIn("No activity yet", self.text(".ops-feed"))
         self.assertIn("Log a weigh-in", self.text(".ops-weight__togo"))
@@ -433,6 +467,111 @@ class CommandCenterBrowserTests(unittest.TestCase):
         self.backend.sse_snapshot = pushed  # delivered on the client's next reconnect
         self.page.wait_for_function("document.querySelector('.ops-ring').getAttribute('aria-valuenow') === '300'", timeout=20000)
         self.page.wait_for_function("document.querySelector('.ops-xp__chip--total .ops-xp__value').textContent === '750'", timeout=5000)
+
+    # ── backfill / day handling (review finding: a backdated log switched the dashboard's day) ──
+    def test_backfill_keeps_today_on_screen_and_files_the_entry_under_its_day(self):
+        self.backend.legacy_backdated = True  # the old server answered with the backdated day's view
+        self.open_command_center()
+        page = self.page
+        gets = self.backend.gets
+        page.fill("#ops-study-minutes", "30")
+        page.fill("#ops-study-date", day(1))
+        page.click("#ops-form-study .ops-form__submit")
+        self.wait_status("study", f"logged for {day(1)}")
+        self.assertIn("+30 XP", self.text("#ops-form-study .ops-form__status"))
+        _, body = self.backend.posts[-1]
+        self.assertEqual(body["on_date"], day(1))
+        # The backdated dashboard is never shown: a quiet GET brings today's back.
+        page.wait_for_timeout(600)
+        self.assertGreater(self.backend.gets, gets, "today's dashboard is re-fetched")
+        self.assertIn(day(0), self.text(".ops-topbar__date"))
+        self.assertEqual(page.get_attribute(".ops-ring", "aria-valuenow"), "120")
+        self.assertIn("Training today", self.text(".ops-fitness"))
+        self.assertEqual(self.text(".ops-fitness .ops-big"), "35")
+        # Today's entries stay in the feed and the backfill is listed under its own date.
+        feed = [" ".join(t.split()) for t in page.locator(".ops-event").all_inner_texts()]
+        self.assertTrue(any("Precalculus" in row and day(0) in row for row in feed), feed)
+        self.assertTrue(any("Algebra 2" in row and day(1) in row for row in feed), feed)
+        # The Date field is back to empty (= today) and today is still allowed.
+        self.assertEqual(page.input_value("#ops-study-date"), "")
+        self.assertEqual(page.get_attribute("#ops-study-date", "max"), day(0))
+        page.fill("#ops-study-minutes", "15")
+        page.fill("#ops-study-date", day(0))
+        page.click("#ops-form-study .ops-form__submit")
+        self.wait_status("study", "+15 XP")
+        self.assertEqual(self.text("#ops-study-date-err"), "")
+        self.assertNotIn("logged for", self.text("#ops-form-study .ops-form__status"))
+        page.wait_for_function("document.querySelector('.ops-ring').getAttribute('aria-valuenow') === '135'")
+
+    def test_backdated_sse_push_is_ignored_and_today_is_refetched(self):
+        self.backend.sse_cycle = True
+        self.open_command_center()
+        gets = self.backend.gets
+        pushed = copy.deepcopy(BASE_SNAPSHOT)
+        pushed["date"] = day(1)
+        pushed["study"].update(today_minutes=30, remaining_minutes=330, progress=30 / 360)
+        self.backend.sse_snapshot = pushed  # delivered on the client's next reconnect
+        deadline = 20
+        while self.backend.sse_snapshot is not None and deadline > 0:
+            self.page.wait_for_timeout(500)
+            deadline -= 1
+        self.assertIsNone(self.backend.sse_snapshot, "the push was delivered")
+        self.page.wait_for_timeout(800)
+        self.assertGreater(self.backend.gets, gets, "a backdated push triggers a re-fetch")
+        self.assertEqual(self.page.get_attribute(".ops-ring", "aria-valuenow"), "120")
+        self.assertIn(day(0), self.text(".ops-topbar__date"))
+        self.assertEqual(self.page.evaluate("window.__NS__.productivity.date"), day(0), "the cache keeps today's view")
+        # The hub card shows today's numbers too.
+        self.page.keyboard.press("h")
+        self.page.wait_for_function("document.querySelector('.hub-ops__title')?.textContent === 'Study 120 / 360 min'", timeout=10000)
+
+    def test_a_new_day_refetches_the_dashboard(self):
+        self.open_command_center()
+        gets = self.backend.gets
+        tomorrow = TODAY + timedelta(days=1)
+        self.page.clock.set_system_time(f"{tomorrow.isoformat()}T09:00:00")
+        self.page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        self.page.wait_for_timeout(600)
+        self.assertGreater(self.backend.gets, gets, "returning to the tab on a new day fetches that day")
+
+    def test_workout_sets_and_reps_must_be_positive_like_the_server(self):
+        self.open_command_center()
+        page = self.page
+        page.keyboard.press("2")
+        page.fill("#ops-workout-activity", "Run")
+        page.fill("#ops-workout-minutes", "30")
+        page.fill("#ops-workout-sets", "0")
+        page.fill("#ops-workout-reps", "0")
+        page.click("#ops-form-workout .ops-form__submit")
+        self.wait_status("workout", "Fix the highlighted fields")
+        self.assertIn("at least 1", self.text("#ops-workout-sets-err"))
+        self.assertIn("Leave it empty", self.text("#ops-workout-sets-err"))
+        self.assertIn("at least 1", self.text("#ops-workout-reps-err"))
+        self.assertEqual(page.get_attribute("#ops-workout-sets", "min"), "1")
+        self.assertEqual(self.backend.posts, [], "0 sets never reaches the server (it would reject it)")
+        page.fill("#ops-workout-sets", "-2")
+        page.fill("#ops-workout-reps", "")
+        page.click("#ops-form-workout .ops-form__submit")
+        self.assertIn("1–1000", self.text("#ops-workout-sets-err"))
+        page.fill("#ops-workout-sets", "")
+        page.fill("#ops-workout-load_lbs", "0")  # load and distance may be 0
+        page.click("#ops-form-workout .ops-form__submit")
+        self.wait_status("workout", "+30 XP")
+        _, body = self.backend.posts[-1]
+        self.assertNotIn("sets", body)
+        self.assertEqual(body["load_lbs"], 0)
+
+    def test_long_milestone_history_is_capped(self):
+        snap = copy.deepcopy(BASE_SNAPSHOT)
+        snap["milestones"] = [{"id": i, "title": f"Daily goal {i:03d}", "achieved_at": day(0)} for i in range(1, 41)]
+        snap["milestones"].append({"id": 99, "title": "Precalculus cleared", "progress": 0.4})
+        self.backend.snapshot = snap
+        self.open_command_center()
+        rows = self.page.locator(".ops-milestone")
+        self.assertEqual(rows.count(), 20)
+        self.assertIn("Precalculus cleared", self.text(".ops-milestone"))  # in progress first
+        self.assertIn("Daily goal 040", self.text(".ops-milestone:nth-child(2)"))  # then newest achieved
+        self.assertIn("+21 earlier milestones", self.text(".ops-milestones__more"))
 
     def test_keyboard_navigation(self):
         self.open_command_center()

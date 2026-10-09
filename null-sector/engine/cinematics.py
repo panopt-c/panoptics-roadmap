@@ -76,8 +76,9 @@ def entry_kind(entry: dict) -> str:
 class CutsceneRenderer:
     """Headless Higgsfield pipeline: still (anchor / reference) → optional video → local download.
 
-    Mutations of the shared `Save` happen under `lock` (pass the GameSession's lock),
-    while the slow network calls run outside it.
+    Mutations of the shared `Save` happen under `lock` (pass the GameSession's lock) as a
+    locked read-modify-write of save.json (`Save.transaction()`), so a gallery entry never
+    overwrites progress another process saved meanwhile. The slow network calls run outside it.
     """
 
     def __init__(self, config: dict, save: Save, cutscene_dir: Path = CUTSCENE_DIR,
@@ -120,6 +121,10 @@ class CutsceneRenderer:
     # ── gallery queries ─────────────────────────────────────
     def entries(self, mission_id: str) -> list[dict]:
         with self._lock:
+            try:
+                self.save.refresh()               # another process may have rendered it meanwhile
+            except (TimeoutError, OSError):
+                pass
             return [dict(e, kind=entry_kind(e)) for e in self.save.gallery if e.get("mission") == mission_id]
 
     def entry(self, mission_id: str, kind: str) -> dict | None:
@@ -221,11 +226,10 @@ class CutsceneRenderer:
     def _record(self, mission_id: str, title: str, url: str, path: str | None, kind: str,
                 anchor: bool = False) -> dict:
         entry = {"mission": mission_id, "title": title, "url": url, "path": path, "kind": kind}
-        with self._lock:
+        with self._lock, self.save.transaction():
             if anchor:
                 self.save.avatar_url = url
             self.save.gallery.append(entry)
-            self.save.write()
         return dict(entry)
 
 

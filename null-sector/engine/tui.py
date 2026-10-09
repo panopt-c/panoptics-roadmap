@@ -2,7 +2,9 @@
 
 Presentation only. Every rule — attempts, the par timer, XP and speed bonus,
 ranks, profile exports, unlocks — comes from `GameSession`, the same headless
-core the web client talks to, so both front ends always agree.
+core the web client talks to, so both front ends always agree. The terminal may
+run next to the web server (they share save.json), so every screen refreshes
+the session before drawing and always shows the latest progress.
 """
 from __future__ import annotations
 
@@ -36,10 +38,20 @@ class Game:
     def save(self) -> Save:
         return self.session.save
 
+    def sync(self) -> None:
+        """Adopt progress saved by another window (the browser) and show any file-damage notices."""
+        self.session.refresh()
+        self.show_notices()
+
+    def show_notices(self) -> None:
+        for notice in self.session.take_notices():
+            self.console.print(f"  [warn]! {notice}[/]")
+
     # ── menus ───────────────────────────────────────────────
     def main_menu(self) -> None:
         ui.boot_sequence(self.console, self.animate)
         while True:
+            self.sync()
             ui.hud(self.console, self.save)
             online, reason = self.director.status()
             feed = "[ok]● ONLINE[/]" if online else f"[muted]○ OFFLINE · {reason}[/]"
@@ -53,6 +65,7 @@ class Game:
                 self.console.print("\n  [pink]Jacking out. Progress saved.[/]\n")
                 return
             if key == "g":
+                self.sync()
                 ui.gallery(self.console, self.save)
                 self.pause()
             if key == "d":
@@ -177,6 +190,7 @@ class Game:
 def run(command: str = "tui", fast: bool = False, session: GameSession | None = None) -> None:
     """Entry point for the terminal commands: tui | hack | watch | reset."""
     game = Game(fast=fast, session=session)
+    game.show_notices()
     try:
         if command == "productivity":
             from engine.productivity.tui import show_command_center

@@ -26,7 +26,6 @@ import contextlib
 import copy
 import json
 import os
-import re
 import tempfile
 import threading
 import time
@@ -314,9 +313,6 @@ _SAVE_SCHEMA = {
     "avatar_url": (lambda v: isinstance(v, str), None),
     "gallery": (lambda v: isinstance(v, list), lambda _i, v: isinstance(v, dict)),
 }
-_SURROGATES = re.compile("[\ud800-\udfff]")
-
-
 def parse_save(text: str) -> tuple[dict, list[str]]:
     """save.json text → (Save field values, problems found). Raises ValueError when it is not a save at all.
 
@@ -344,6 +340,18 @@ def parse_save(text: str) -> tuple[dict, list[str]]:
     return values, problems
 
 
+def _unknown_keys(text: str) -> dict:
+    """Top-level save.json keys that `Save` has no field for (written by another game version)."""
+    try:
+        data = json.loads(text)
+    except (ValueError, RecursionError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    known = {f.name for f in fields(Save)}
+    return {k: v for k, v in data.items() if isinstance(k, str) and k not in known}
+
+
 @dataclass
 class Save:
     callsign: str = ""
@@ -360,6 +368,7 @@ class Save:
         self._sig = None          # (inode, mtime_ns, size) of the save.json this object mirrors
         self._raw = None          # that file's text, to tell real changes from a touch
         self._notices: list[str] = []
+        self._extra: dict = {}    # top-level keys this version does not know (kept, never dropped)
         self.reloads = 0          # how many times changes written by another process were adopted
 
     @classmethod
@@ -395,11 +404,20 @@ class Save:
 
     @contextlib.contextmanager
     def transaction(self):
-        """Locked read-modify-write: re-read save.json, let the caller change this object, write it back."""
+        """Locked read-modify-write: re-read save.json, let the caller change this object, write it back.
+
+        If the body raises, nothing is written and the in-memory object is rolled back,
+        so a half-applied change can never leak into a later write.
+        """
         with interprocess_lock(self.lock_path):
             self._reload_locked()
             before = asdict(self)
-            yield self
+            try:
+                yield self
+            except BaseException:
+                for name, value in before.items():
+                    setattr(self, name, value)
+                raise
             if asdict(self) != before or self._sig is None:
                 self._write_locked()
 
@@ -409,7 +427,8 @@ class Save:
             self._write_locked()
 
     def _write_locked(self) -> None:
-        text = json.dumps(asdict(self), indent=2)
+        data = {**self._extra, **asdict(self)}
+        text = json.dumps(data, indent=2)
         atomic_write_text(self._path, text)
         self._sig, self._raw = _signature(self._path), text
 
@@ -445,6 +464,7 @@ class Save:
                 self._write_locked()
             return False
         fresh = type(self)(**values)
+        self._extra = _unknown_keys(text)
         changed = any(getattr(self, f.name) != getattr(fresh, f.name) for f in fields(self))
         for f in fields(self):
             setattr(self, f.name, getattr(fresh, f.name))

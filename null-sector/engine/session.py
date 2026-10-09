@@ -21,14 +21,24 @@ Concurrency
   under the lock afterwards, re-checking "first clear" so two racing hacks can
   never pay out twice. The API stays responsive while a slow mission grades.
 
+  save.json is shared with other NULL//SECTOR processes (`game.py tui`, `hack`,
+  `watch` next to the web server). Every public method first adopts changes
+  another process wrote (`Save.refresh()`, a stat call when nothing changed), and
+  every change is a locked read-modify-write (`Save.transaction()`), so progress
+  made in one front end is never overwritten by another. The productivity tracker's
+  SQLite work runs outside the session lock, on a copy of the campaign values it needs.
+
 Filesystem locations come from an injectable `Paths`; tests run in a temp dir.
 """
 from __future__ import annotations
 
+import contextlib
 import copy
+import sqlite3
 import threading
 import unicodedata
 from dataclasses import dataclass
+from types import SimpleNamespace
 from pathlib import Path
 from urllib.parse import quote
 
@@ -36,8 +46,9 @@ from engine import errors
 from engine.cinematics import CutsceneRenderer, entry_kind
 from engine.content import render_markdown
 from engine.mission import Cutscene, Mission
+from engine.productivity.db import SchemaTooNewError
 from engine.runner import HackReport, ensure_mission_file, hack, mission_path
-from engine.state import Paths, Save, atomic_write_text, load_config
+from engine.state import Paths, Save, SaveLockTimeout, atomic_write_text, load_config
 from levels import ALL_LEVELS, CAMPAIGN, LevelEntry, load_mission, next_level, sector_of
 
 # Values your mission code is allowed to write into your profile.
@@ -77,8 +88,10 @@ class AttackOutcome:
 class GameSession:
     def __init__(self, paths: Paths | None = None, config: dict | None = None):
         self.paths = paths or Paths()
-        self.config = config if config is not None else load_config(self.paths)
+        self._notices: list[str] = []
+        self.config = config if config is not None else load_config(self.paths, self._notices)
         self.save = Save.load(self.paths.save_path)
+        self._notices.extend(self.save.take_notices())
         self._lock = threading.RLock()
         self._grading = threading.Lock()
         self._cutscene_root = self.paths.cutscene_dir.resolve()
@@ -88,6 +101,7 @@ class GameSession:
     def snapshot(self) -> dict:
         """The `State` payload: profile, campaign map, Higgsfield status, gallery."""
         with self._lock:
+            self._sync()
             title, floor, nxt = self.save.rank()
             current = next_level(self.save.cleared)
             online, reason = self.cinema.status()
@@ -114,11 +128,17 @@ class GameSession:
         """SQLite command center state, separate from the stable campaign API."""
         from engine.productivity.integration import snapshot
 
-        with self._lock:
-            try:
-                return snapshot(self.paths, self.save, on_date)
-            except ValueError as exc:
-                raise SessionError(400, str(exc)) from exc
+        campaign = self._campaign_view()
+        with _productivity_errors():
+            return snapshot(self.paths, campaign, on_date)
+
+    def productivity_rewards(self) -> list[dict]:
+        """Every cinematic reward payload (oldest first). Snapshots carry only the recent ones."""
+        from engine.productivity.integration import rewards
+
+        campaign = self._campaign_view()
+        with _productivity_errors():
+            return rewards(self.paths, campaign)
 
     def log_productivity(self, command: str, payload: dict) -> dict:
         """Shared write path for HTTP handlers and the terminal command center."""
@@ -126,23 +146,24 @@ class GameSession:
 
         if not isinstance(payload, dict):
             raise SessionError(400, "activity payload must be a JSON object")
-        with self._lock:
-            try:
-                return execute(self.paths, self.save, command, payload)
-            except (ValueError, TypeError) as exc:
-                raise SessionError(400, str(exc)) from exc
+        campaign = self._campaign_view()
+        with _productivity_errors():
+            return execute(self.paths, campaign, command, payload)
 
     def mission(self, mission_id: str) -> dict:
         """The `Mission` payload. Read-only: never creates files or starts the timer."""
         with self._lock:
+            self._sync()
             return self._mission_payload(self._playable_mission(mission_id))
 
     def deploy(self, mission_id: str) -> dict:
         """Start the par timer (first time only), drop the starter file if missing, return `Mission`."""
         with self._lock:
+            self._sync()
             mission = self._playable_mission(mission_id)
             ensure_mission_file(mission, missions_dir=self.paths.missions_dir)
-            self.save.deploy(mission.id)
+            with self._saving():
+                self.save.deploy(mission.id)
             return self._mission_payload(mission)
 
     def write_source(self, mission_id: str, text: str) -> dict:
@@ -151,6 +172,7 @@ class GameSession:
             raise SessionError(400, "source must be a string")
         text = normalize_source(text)
         with self._lock:
+            self._sync()
             path = mission_path(self._playable_mission(mission_id), self.paths.missions_dir)
             try:
                 atomic_write_text(path, text)
@@ -165,12 +187,15 @@ class GameSession:
     def attack_detailed(self, mission_id: str) -> AttackOutcome:
         with self._grading:
             with self._lock:
+                self._sync()
                 mission = self._playable_mission(mission_id)
                 ensure_mission_file(mission, missions_dir=self.paths.missions_dir)
-                self.save.deploy(mission.id)          # hacking without deploying still starts the clock
-                attempt = self.save.record_attempt(mission.id)
-            report = hack(mission, self.paths.missions_dir)
+                with self._saving():
+                    self.save.deploy(mission.id)      # hacking without deploying still starts the clock
+                    attempt = self.save.record_attempt(mission.id)
+            report = hack(mission, self.paths.missions_dir)   # no lock held: grading can take seconds
             with self._lock:
+                self._sync()
                 victory = report.victory
                 reward = self._apply_victory(mission, report) if victory else None
                 payload = {
@@ -186,6 +211,7 @@ class GameSession:
     def reset(self, mission_id: str) -> dict:
         """Restore the starter code. Returns {"source": str}."""
         with self._lock:
+            self._sync()
             mission = self._playable_mission(mission_id)
             ensure_mission_file(mission, reset=True, missions_dir=self.paths.missions_dir)
             return {"source": mission.starter.lstrip("\n")}
@@ -193,6 +219,7 @@ class GameSession:
     def playable(self, mission_id: str) -> bool:
         """Cleared levels and the current (built) level are playable; nothing else."""
         with self._lock:
+            self._sync()
             entry = _LEVELS.get(mission_id)
             return entry is not None and self._status(entry, next_level(self.save.cleared)) in ("cleared", "current")
 
@@ -201,9 +228,27 @@ class GameSession:
     def lock(self) -> threading.RLock:
         return self._lock
 
+    def refresh(self) -> bool:
+        """Adopt progress another process wrote to save.json. True when something changed."""
+        with self._lock:
+            return self._sync()
+
+    @property
+    def save_reloads(self) -> int:
+        """How many times changes written by another process have been adopted (the watcher's cue)."""
+        return self.save.reloads
+
+    def take_notices(self) -> list[str]:
+        """Messages about damaged config/save files found so far (each returned once)."""
+        with self._lock:
+            self._notices.extend(self.save.take_notices())
+            notices, self._notices = self._notices, []
+            return notices
+
     def current_level(self) -> LevelEntry | None:
         """The first level not yet cleared (it may still be encrypted); None when the campaign is done."""
         with self._lock:
+            self._sync()
             return next_level(self.save.cleared)
 
     def current_playable_id(self) -> str | None:
@@ -230,6 +275,7 @@ class GameSession:
     def cutscene(self, mission_id: str) -> Cutscene | None:
         """A cleared mission's cutscene (None if it has none). Uncleared missions → 403."""
         with self._lock:
+            self._sync()
             mission = self._playable_mission(mission_id)
             if mission.id not in self.save.cleared:
                 raise SessionError(403, f"clear {mission.id} to unlock its transmission")
@@ -248,6 +294,31 @@ class GameSession:
         return entry.get("url") or ""
 
     # ── internals ───────────────────────────────────────────
+    def _sync(self) -> bool:
+        """Adopt save.json changes from other processes (call with the lock held). Never raises."""
+        try:
+            changed = self.save.refresh()
+        except (SaveLockTimeout, OSError):
+            return False          # keep serving what we have; the next call tries again
+        self._notices.extend(self.save.take_notices())
+        return changed
+
+    @contextlib.contextmanager
+    def _saving(self):
+        """Turn save.json write failures into clean API errors instead of tracebacks."""
+        try:
+            yield
+        except SaveLockTimeout as exc:
+            raise SessionError(503, "your save file is busy in another NULL//SECTOR window; try again") from exc
+        except OSError as exc:
+            raise SessionError(503, f"your progress could not be saved ({exc.strerror or exc})") from exc
+
+    def _campaign_view(self) -> SimpleNamespace:
+        """A copy of what the productivity tracker reads from Save, taken under the lock."""
+        with self._lock:
+            self._sync()
+            return SimpleNamespace(cleared=dict(self.save.cleared), callsign=self.save.callsign, xp=self.save.xp)
+
     def _entry(self, mission_id: str) -> LevelEntry:
         entry = _LEVELS.get(mission_id) if isinstance(mission_id, str) else None
         if entry is None:
@@ -307,21 +378,23 @@ class GameSession:
 
     def _apply_victory(self, mission: Mission, report: HackReport) -> dict:
         save = self.save
-        first_clear = mission.id not in save.cleared
-        rank_before = save.rank()[0]
-        self._apply_exports(report.exports)
-        if first_clear:
-            seconds = save.elapsed(mission.id)
-            lines = [{"label": "BASE XP", "amount": mission.xp}]
-            if seconds <= mission.par_seconds:
-                lines.append({"label": "SPEED BONUS", "amount": mission.xp // 2})
-            gained = sum(line["amount"] for line in lines)
-            save.xp += gained
-            save.cleared[mission.id] = {"xp": gained, "attempts": save.attempts.get(mission.id, 0),
-                                        "seconds": int(seconds)}
-        else:
-            seconds, lines, gained = save.cleared[mission.id].get("seconds", 0), [], 0
-        save.write()
+        # One locked read-modify-write: "first clear" is decided against the save on disk, so a
+        # clear made meanwhile in another process (the terminal) is respected, never overwritten.
+        with self._saving(), save.transaction():
+            first_clear = mission.id not in save.cleared
+            rank_before = save.rank()[0]
+            self._apply_exports(report.exports)
+            if first_clear:
+                seconds = save.elapsed(mission.id)
+                lines = [{"label": "BASE XP", "amount": mission.xp}]
+                if seconds <= mission.par_seconds:
+                    lines.append({"label": "SPEED BONUS", "amount": mission.xp // 2})
+                gained = sum(line["amount"] for line in lines)
+                save.xp += gained
+                save.cleared[mission.id] = {"xp": gained, "attempts": save.attempts.get(mission.id, 0),
+                                            "seconds": int(seconds)}
+            else:
+                seconds, lines, gained = save.cleared[mission.id].get("seconds", 0), [], 0
         rank_after = save.rank()[0]
         return {
             "lines": lines, "gained": gained,
@@ -349,8 +422,34 @@ class GameSession:
 
 
 # ── pure helpers ────────────────────────────────────────────
+@contextlib.contextmanager
+def _productivity_errors():
+    """Tracker failures as SessionErrors: bad input → 400, a busy or broken database → 503."""
+    try:
+        yield
+    except (ValueError, TypeError) as exc:
+        raise SessionError(400, str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise SessionError(400, f"activity rejected by the tracker database ({exc})") from exc
+    except sqlite3.OperationalError as exc:
+        text = str(exc).lower()
+        if "locked" in text or "busy" in text:
+            raise SessionError(503, "the productivity database is busy (another program has it open); "
+                                    "try again in a moment") from exc
+        raise SessionError(503, f"the productivity database is unavailable ({exc})") from exc
+    except sqlite3.DatabaseError as exc:
+        raise SessionError(503, f"the productivity database could not be read ({exc})") from exc
+    except SchemaTooNewError as exc:
+        raise SessionError(503, str(exc)) from exc
+
+
 def normalize_source(text: str) -> str:
-    return text.replace("\r\n", "\n").replace("\r", "\n")
+    """LF newlines, and valid text only: a lone UTF-16 surrogate (half an emoji, cut by an editor)
+    cannot be written as UTF-8, so it becomes U+FFFD instead of failing the save."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if any("\ud800" <= ch <= "\udfff" for ch in text):
+        text = "".join("\ufffd" if "\ud800" <= ch <= "\udfff" else ch for ch in text)
+    return text
 
 
 def clean_callsign(value) -> str:

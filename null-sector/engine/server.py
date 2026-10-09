@@ -17,7 +17,9 @@ Threads
   * one per HTTP connection (daemon; HTTP/1.1 keep-alive),
   * `MissionWatcher`: polls the active mission file every 300 ms and streams
     external edits as `file` events; writes made through the API are wrapped in
-    `own_write()`, which re-baselines the content hash so they never echo back,
+    `own_write()`, which re-baselines the content hash so they never echo back.
+    It also polls save.json: progress saved by another process (`game.py tui`,
+    `hack`, `watch`) is adopted and pushed to every tab as a `state` event,
   * `CutsceneJobs`: a single worker that renders Higgsfield cutscenes (minutes
     long) and streams progress as `cutscene` events. A victory queues the render
     immediately so it cooks while the player reads the reward screen.
@@ -98,10 +100,23 @@ class HttpError(Exception):
         self.headers = headers or {}
 
 
+def json_bytes(data) -> bytes:
+    """Compact UTF-8 JSON that can never fail to encode.
+
+    Text holding a lone UTF-16 surrogate (it can arrive through argv or old rows) is
+    not valid UTF-8; such payloads fall back to ASCII escapes, which every JSON
+    parser accepts, instead of turning the response into a 500.
+    """
+    text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    try:
+        return text.encode("utf-8")
+    except UnicodeEncodeError:
+        return json.dumps(data, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+
+
 def encode_event(event: str, data) -> bytes:
     """One SSE message. json.dumps never emits raw newlines, so `data:` stays on one line."""
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+    return f"event: {event}\ndata: ".encode("utf-8") + json_bytes(data) + b"\n\n"
 
 
 def content_type(path: Path) -> str:
@@ -205,6 +220,7 @@ class MissionWatcher:
         self._path: Path | None = None
         self._signature: tuple[int, int] | None = None
         self._digest: bytes | None = None   # hash of the content the client is known to have
+        self._reloads = session.save_reloads   # save.json changes from other processes already published
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -252,6 +268,16 @@ class MissionWatcher:
                 if self._mission == mission_id:
                     self._adopt_disk()
 
+    def poll_save(self) -> None:
+        """Push progress another process saved (a terminal clear, say) to every open tab."""
+        self._session.refresh()
+        for notice in self._session.take_notices():
+            print(f"  ! {notice}", file=sys.stderr)
+        reloads = self._session.save_reloads
+        if reloads != self._reloads:
+            self._reloads = reloads
+            self._broker.publish("state", self._session.snapshot())
+
     def _adopt_disk(self) -> None:
         self._signature = _file_signature(self._path)
         current = _read_source(self._path)
@@ -265,6 +291,7 @@ class MissionWatcher:
                 traceback.print_exc()
 
     def poll(self) -> None:
+        self.poll_save()
         path = self._path
         if path is None:
             current = self._session.current_playable_id()
@@ -517,7 +544,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._json(200, self.server.session.productivity_snapshot())
 
     def api_productivity_rewards(self) -> None:
-        self._json(200, self.server.session.productivity_snapshot()["cinematic_jobs"])
+        self._json(200, self.server.session.productivity_rewards())
 
     def api_log_productivity(self, command: str) -> None:
         result = self.server.session.log_productivity(command, self._read_json())
@@ -683,12 +710,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._read_body()
         try:
             return json.loads(data.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (ValueError, RecursionError):
+            # ValueError covers invalid UTF-8, malformed JSON and integers too long to convert;
+            # RecursionError covers absurdly nested arrays. None of it may reach a traceback.
             raise HttpError(400, "body is not valid JSON") from None
 
     # ── responses ───────────────────────────────────────────
     def _json(self, status: int, payload, headers: dict | None = None) -> None:
-        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        body = json_bytes(payload)
         self._respond(status, body, "application/json; charset=utf-8", {"Cache-Control": "no-store", **(headers or {})})
 
     def _respond(self, status: int, body: bytes | None, ctype: str | None, headers: dict | None = None) -> None:
@@ -899,6 +928,8 @@ def serve(session: GameSession, host: str = "127.0.0.1", port: int = DEFAULT_POR
     server.start_services()
     if on_ready:
         on_ready(server.url)
+    for notice in session.take_notices():      # e.g. a damaged save.json was moved aside
+        print(f"  ! {notice}", file=sys.stderr)
     if open_browser:
         threading.Thread(target=webbrowser.open, args=(server.url,), name="ns-browser", daemon=True).start()
 

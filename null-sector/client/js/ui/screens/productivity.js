@@ -229,6 +229,12 @@ export class ProductivityScreen {
   #ledger = new SubmissionLedger();
   #busy = new Set(); // kinds with a submission in flight
   #loadSeq = 0;
+  #loadedDay = ''; // the local calendar day of the last successful GET
+  #dayTimer = 0;
+  #refreshTimer = 0;
+  #onVisibility = () => {
+    if (!document.hidden) this.#checkDay();
+  };
 
   constructor(ctx) {
     this.#ctx = ctx;
@@ -250,15 +256,29 @@ export class ProductivityScreen {
     ctx.renderer?.setFocus?.(0.55);
     this.#offs.push(ctx.bus.on('server:productivity', (snap) => this.#adopt(snap)));
 
-    if (ctx.productivity) this.#adopt(ctx.productivity);
+    // A cached snapshot of an earlier day (a backfill's broadcast on an older server, or a tab
+    // left open overnight) is not today's dashboard: wait for the GET instead of flashing it.
+    const cached = ctx.productivity;
+    const cachedDay = snapshotDay(cached);
+    if (cached && !(cachedDay && cachedDay < localDay())) this.#adopt(cached);
     else this.#setLoading(true);
     void this.#load(); // always refresh: a cached snapshot may be stale
+
+    this.#loadedDay = '';
+    clearInterval(this.#dayTimer);
+    this.#dayTimer = setInterval(() => this.#checkDay(), DAY_CHECK_MS);
+    document.addEventListener('visibilitychange', this.#onVisibility);
   }
 
   async exit() {
     this.#alive = false;
     for (const off of this.#offs) off();
     this.#offs.length = 0;
+    clearInterval(this.#dayTimer);
+    clearTimeout(this.#refreshTimer);
+    this.#dayTimer = 0;
+    this.#refreshTimer = 0;
+    document.removeEventListener('visibilitychange', this.#onVisibility);
   }
 
   onKey(e) {
@@ -297,7 +317,8 @@ export class ProductivityScreen {
     try {
       const snap = await this.#ctx.api.productivity();
       if (!this.#alive || seq !== this.#loadSeq) return;
-      this.#adopt(snap);
+      this.#loadedDay = localDay();
+      this.#adopt(snap, { trusted: true });
       if (announce) this.#ctx.toast('Command center synced.', { kind: 'ok', ms: 1600 });
     } catch (err) {
       if (!this.#alive || seq !== this.#loadSeq) return;
@@ -309,13 +330,47 @@ export class ProductivityScreen {
     }
   }
 
-  #adopt(snap) {
-    if (!snap || typeof snap !== 'object' || !this.#alive) return;
+  /**
+   * Render a snapshot. `trusted`: it is the answer to our own GET, i.e. today's dashboard. Any
+   * other source (a log response, an SSE push) describing an *earlier* day than the one on
+   * screen is a backdated view: it is never shown; a quiet GET fetches today's instead.
+   * @returns {boolean} whether the snapshot was adopted
+   */
+  #adopt(snap, { trusted = false } = {}) {
+    if (!snap || typeof snap !== 'object' || !this.#alive) return false;
+    if (!trusted && this.#snap && isEarlierDay(snap, this.#snap)) {
+      this.#ctx.productivity = this.#snap; // main.js cached the pushed one; keep today's
+      this.#queueRefresh();
+      return false;
+    }
     this.#ctx.productivity = snap;
     this.#snap = snap;
     this.#setLoading(false);
     this.#hideFault();
     this.#render(snap);
+    return true;
+  }
+
+  /** Coalesced background re-fetch (several stale pushes in a row cost one GET). */
+  #queueRefresh() {
+    if (this.#refreshTimer || !this.#alive) return;
+    this.#refreshTimer = setTimeout(() => {
+      this.#refreshTimer = 0;
+      if (this.#alive) void this.#load();
+    }, REFRESH_DEBOUNCE_MS);
+  }
+
+  /** Midnight (or a tab woken the next morning): today moved on, so fetch the new day. */
+  #checkDay() {
+    if (!this.#alive || !this.#loadedDay) return;
+    if (localDay() !== this.#loadedDay) this.#queueRefresh();
+  }
+
+  /** The latest day that may be logged: today (the later of the local and the server's day). */
+  #today() {
+    const local = localDay();
+    const server = snapshotDay(this.#snap);
+    return server > local ? server : local;
   }
 
   #setLoading(on) {
@@ -588,7 +643,12 @@ export class ProductivityScreen {
   #buildWorkoutForm() {
     const list = h('datalist', { id: 'ops-workout-presets' }, ...WORKOUT_PRESETS.map((p) => h('option', { value: p })));
     const opt = (name, label, attrs) =>
-      this.#field(`ops-workout-${name}`, label, this.#input(name, { type: 'number', inputmode: 'decimal', min: '0', ...attrs }), { hint: 'Optional' });
+      this.#field(
+        `ops-workout-${name}`,
+        label,
+        this.#input(name, { type: 'number', inputmode: 'decimal', min: String(LIMITS[name].min), max: String(LIMITS[name].max), ...attrs }),
+        { hint: 'Optional' },
+      );
     return this.#formShell(
       'workout',
       'Log a workout',
@@ -713,10 +773,12 @@ export class ProductivityScreen {
     const fitness = snap.fitness || {};
     const game = snap.game || {};
 
-    r.date.textContent = snap.date ? `Daily ops · ${snap.date}` : 'Daily ops';
+    const day = snapshotDay(snap);
+    r.date.textContent = day ? `Daily ops · ${day}` : 'Daily ops';
+    const max = this.#today();
     for (const form of r.forms.values()) {
       const date = form.querySelector('input[name="on_date"]');
-      if (date && snap.date) date.max = snap.date;
+      if (date) date.max = max;
     }
 
     this.#renderXp(game);
@@ -862,7 +924,9 @@ export class ProductivityScreen {
     const total = items.reduce((sum, it) => sum + itemQty(it), 0);
     r.itemCount.textContent = `${total} ${total === 1 ? 'item' : 'items'}`;
     if (!items.length) {
-      r.inventory.replaceChildren(h('li', { class: 'ops-empty' }, 'No items in your inventory yet.'));
+      // Gear exists only when a reward grants it (Database.add_item); say exactly that, and
+      // never imply a drop table the tracker does not have.
+      r.inventory.replaceChildren(h('li', { class: 'ops-empty' }, 'No gear yet. When a reward grants gear, it is stocked here.'));
       return;
     }
     r.inventory.replaceChildren(
@@ -886,9 +950,15 @@ export class ProductivityScreen {
       r.milestones.replaceChildren(h('li', { class: 'ops-empty' }, 'No milestones yet.'));
       return;
     }
-    const sorted = [...list].sort((a, b) => Number(milestoneDone(a)) - Number(milestoneDone(b)));
+    // In progress first, then achieved newest-first; a long history is capped (the snapshot
+    // grows by one milestone per completed day) with a count of the rest.
+    const open = list.filter((m) => !milestoneDone(m));
+    const achieved = list.filter((m) => milestoneDone(m)).reverse();
+    const sorted = [...open, ...achieved];
+    const shown = sorted.slice(0, MILESTONE_LIMIT);
+    const hiddenDone = sorted.length - shown.length;
     r.milestones.replaceChildren(
-      ...sorted.map((m) => {
+      ...shown.map((m) => {
         const done = milestoneDone(m);
         const progress = m.progress !== undefined && m.progress !== null ? clamp01(m.progress) : done ? 1 : null;
         return h(
@@ -905,6 +975,7 @@ export class ProductivityScreen {
           h('span', { class: 'visually-hidden' }, done ? 'achieved' : 'in progress'),
         );
       }),
+      hiddenDone > 0 ? h('li', { class: 'ops-empty ops-milestones__more' }, `+${hiddenDone} earlier ${hiddenDone === 1 ? 'milestone' : 'milestones'}`) : null,
     );
   }
 
@@ -1027,6 +1098,7 @@ export class ProductivityScreen {
       }
       const n = Number(raw);
       if (!Number.isInteger(n)) errors.push([name, `${label} must be a whole number.`]);
+      else if (!required && n === 0 && min > 0) errors.push([name, `${label} must be at least ${min}. Leave it empty if there were none.`]);
       else if (n < min || n > max) errors.push([name, `${label} must be ${min}–${max}.`]);
       else payload[name] = n;
     };
@@ -1055,24 +1127,24 @@ export class ProductivityScreen {
       const course = value('course');
       if (!COURSES.includes(course)) errors.push(['course', 'Pick a course.']);
       else payload.course = course;
-      intField('minutes', 'Minutes', { min: 1, max: 1440, required: true });
-      textField('topic', 'Topic', { max: 200 });
+      intField('minutes', 'Minutes', { ...LIMITS.minutes, required: true });
+      textField('topic', 'Topic', { max: LIMITS.topic });
     } else if (kind === 'workout') {
-      textField('activity', 'Activity', { max: 80, required: true });
-      intField('minutes', 'Minutes', { min: 1, max: 1440, required: true });
-      intField('sets', 'Sets', { min: 0, max: 1000 });
-      intField('reps', 'Reps', { min: 0, max: 10000 });
-      decField('load_lbs', 'Load', { min: 0, max: 2000 });
-      decField('distance_miles', 'Distance', { min: 0, max: 500 });
-      textField('note', 'Note', { max: 500 });
+      textField('activity', 'Activity', { max: LIMITS.activity, required: true });
+      intField('minutes', 'Minutes', { ...LIMITS.minutes, required: true });
+      intField('sets', 'Sets', LIMITS.sets);
+      intField('reps', 'Reps', LIMITS.reps);
+      decField('load_lbs', 'Load', LIMITS.load_lbs);
+      decField('distance_miles', 'Distance', LIMITS.distance_miles);
+      textField('note', 'Note', { max: LIMITS.note });
     } else if (kind === 'weight') {
-      decField('weight_lbs', 'Weight', { min: 50, max: 800, required: true });
+      decField('weight_lbs', 'Weight', { ...LIMITS.weight_lbs, required: true });
     }
 
     const date = value('on_date');
     if (date) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push(['on_date', 'Use YYYY-MM-DD.']);
-      else if (this.#snap?.date && date > this.#snap.date) errors.push(['on_date', 'Future dates cannot be logged.']);
+      else if (date > this.#today()) errors.push(['on_date', 'Future dates cannot be logged.']);
       else payload.on_date = date;
     }
     return errors.length ? { errors } : { payload };
@@ -1103,7 +1175,12 @@ export class ProductivityScreen {
       return;
     }
 
-    const body = { ...payload, request_id: this.#ledger.idFor(kind, payload) };
+    // An empty Date field means today. When this browser and the server agree on today, pin it
+    // at the first submit: a retry of the same entry after midnight then still names its day.
+    const local = localDay();
+    const claim = this.#ledger.claim(kind, payload, snapshotDay(this.#snap) === local ? local : null);
+    const body = { ...payload, request_id: claim.id };
+    if (claim.day && !body.on_date) body.on_date = claim.day;
     const call = { study: 'logStudy', workout: 'logWorkout', weight: 'logWeight' }[kind];
     this.#busy.add(kind);
     form.classList.add('is-sending');
@@ -1131,7 +1208,7 @@ export class ProductivityScreen {
       }
       this.#ledger.settle(kind);
       if (!this.#alive) return;
-      this.#onLogged(kind, form, result);
+      this.#onLogged(kind, form, result, body);
     } catch (err) {
       if (!this.#alive) return;
       if (isUncertain(err)) {
@@ -1163,11 +1240,15 @@ export class ProductivityScreen {
     return fields.find((f) => text.includes(f) || text.includes(f.replace('_', ' '))) || (text.includes('date') ? 'on_date' : null);
   }
 
-  #onLogged(kind, form, result) {
+  #onLogged(kind, form, result, body = {}) {
     const activity = result?.activity || {};
     const xp = num(activity.xp_awarded);
     const labels = { study: 'Study session logged', workout: 'Workout logged', weight: 'Weigh-in logged' };
-    this.#setStatus(form, xp > 0 ? `${labels[kind]} · +${xp} XP` : labels[kind], 'ok');
+    // A backfill is filed under its own day; say so, since today's numbers do not move.
+    const filed = String(activity.log_date || body.on_date || '');
+    const shownDay = snapshotDay(this.#snap) || localDay();
+    const label = /^\d{4}-\d{2}-\d{2}$/.test(filed) && filed < shownDay ? `${labels[kind]} for ${filed}` : labels[kind];
+    this.#setStatus(form, xp > 0 ? `${label} · +${xp} XP` : label, 'ok');
     // Keep the course (sessions often repeat it); clear everything else.
     for (const control of form.querySelectorAll('.ops-input')) {
       if (control.name !== 'course') control.value = '';
@@ -1178,7 +1259,7 @@ export class ProductivityScreen {
     this.#ctx.bus.emit('reward:stamp', at);
     if (xp > 0) {
       this.#ctx.bus.emit('reward:tick', {});
-      this.#ctx.toast(`+${xp} XP — ${labels[kind].toLowerCase()}.`, { kind: 'ok', title: 'LOGGED', ms: 2600 });
+      this.#ctx.toast(`+${xp} XP — ${label.toLowerCase()}.`, { kind: 'ok', title: 'LOGGED', ms: 2600 });
     }
     if (!settings.get('reducedMotion')) {
       const row = this.#r.feed.querySelector('.ops-event');

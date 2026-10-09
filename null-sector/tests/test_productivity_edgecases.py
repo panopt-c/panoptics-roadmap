@@ -44,7 +44,7 @@ class ProductivityRecoveryTests(SandboxTestCase):
         restarted = GameSession(self.paths)
         recovered = restarted.productivity_snapshot()
         self.assertEqual(len(recovered["cinematic_jobs"]), 2)
-        self.assertEqual(recovered["cinematic_jobs"][0], first[0])
+        self.assertEqual(recovered["cinematic_jobs"][-1], first[0])     # newest first
         self.assertEqual(recovered["game"]["campaign_xp"], 320)
         self.assertEqual(recovered["game"]["productivity_xp"], 0)
         self.assertEqual(restarted.productivity_snapshot()["cinematic_jobs"], recovered["cinematic_jobs"])
@@ -84,9 +84,13 @@ class ProductivityRecoveryTests(SandboxTestCase):
         self.assertEqual(self.session.productivity_snapshot(day)["study"]["current_streak_days"], 0)
         result = self.session.log_productivity("study", {
             "course": "Algebra 2", "minutes": 360, "on_date": day, "request_id": "earliest-day"})
-        self.assertEqual(result["snapshot"]["study"]["current_streak_days"], 1)
+        # The write response always shows today; the backfilled day is read back explicitly.
+        self.assertEqual(result["snapshot"]["date"], date.today().isoformat())
         self.assertEqual(result["snapshot"]["study"]["best_streak_days"], 1)
         self.assertEqual(result["snapshot"]["game"]["productivity_xp"], 460)
+        backfilled = self.session.productivity_snapshot(day)
+        self.assertEqual(backfilled["study"]["current_streak_days"], 1)
+        self.assertEqual(backfilled["study"]["best_streak_days"], 1)
 
     def test_backfilled_weight_crossing_awards_once_despite_later_rebound(self):
         for weight, day, key in ((200, "2026-01-01", "baseline"),

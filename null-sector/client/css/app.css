@@ -2978,6 +2978,67 @@ body.no-webgl #fallback-bg {
   color: var(--magenta);
 }
 
+/* in-engine transmission (a cleared cutscene with no rendered media): replays in the cutscene screen */
+.frag--transmission {
+  cursor: pointer;
+}
+
+.frag__media--signal {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at 50% 55%, rgba(var(--c-rgb, 0, 240, 255), 0.22), rgba(5, 6, 10, 0) 70%),
+    linear-gradient(135deg, rgba(255, 43, 214, 0.08), rgba(0, 240, 255, 0.06));
+}
+
+.frag__signal-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  background:
+    repeating-linear-gradient(90deg, rgba(var(--c-rgb, 0, 240, 255), 0.14) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(0deg, rgba(var(--c-rgb, 0, 240, 255), 0.1) 0 1px, transparent 1px 18px);
+  mask-image: radial-gradient(ellipse at 50% 50%, #000 30%, transparent 78%);
+}
+
+.frag__play {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(var(--c-rgb, 0, 240, 255), 0.6);
+  border-radius: 50%;
+  color: rgb(var(--c-rgb, 0, 240, 255));
+  background: rgba(5, 6, 10, 0.55);
+  box-shadow: 0 0 18px rgba(var(--c-rgb, 0, 240, 255), 0.3);
+  transition:
+    transform var(--t-med) var(--ease-out),
+    box-shadow var(--t-med) var(--ease-out);
+}
+
+.frag__play svg {
+  width: 20px;
+  height: 20px;
+}
+
+.frag--transmission:hover .frag__play,
+.frag--transmission:focus-visible .frag__play {
+  transform: scale(1.08);
+  box-shadow: 0 0 26px rgba(var(--c-rgb, 0, 240, 255), 0.55);
+}
+
+.frag__kind.is-engine {
+  color: var(--cyan);
+}
+
+.hub-gallery__note {
+  padding: 2px 4px;
+  font: 500 11px/1.5 var(--font-display);
+  color: var(--dim);
+}
+
 @keyframes shimmer {
   from { transform: translate3d(-100%, 0, 0); }
   to { transform: translate3d(100%, 0, 0); }

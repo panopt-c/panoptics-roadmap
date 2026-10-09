@@ -7,8 +7,18 @@ import sqlite3
 import sys
 
 from .backend import CommandCenter
-from .db import DEFAULT_DB_PATH
+from .db import DEFAULT_DB_PATH, scrub_surrogates
 from .tracker import COURSES
+
+
+def _argv_text(value):
+    """Undo argv's surrogateescape: bytes that were not UTF-8 become U+FFFD instead of invalid text."""
+    if not isinstance(value, str):
+        return value
+    try:
+        return value.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+    except UnicodeEncodeError:       # a real lone surrogate, not an escaped byte
+        return scrub_surrogates(value)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--date", dest="on_date", help="YYYY-MM-DD (default: local calendar date)")
         if command is not habit:
             command.add_argument("--request-id", help="Reuse for retries of the same submission")
-    args = vars(parser.parse_args(argv))
+    args = {key: _argv_text(value) for key, value in vars(parser.parse_args(argv)).items()}
     path, player, command = args.pop("db"), args.pop("player"), args.pop("command")
     try:
         with CommandCenter(path, player_name=player) as app:
@@ -51,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
             elif command == "dashboard":
                 result = app.snapshot(**args)
             elif command == "rewards":
-                app.cinematics.queue_rewards()
+                app.reconcile()
                 result = app.cinematics.jobs()
             else:
                 result = app.execute(command, **args)

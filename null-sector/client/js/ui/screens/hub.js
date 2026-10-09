@@ -1,7 +1,7 @@
 /**
  * HubScreen — the operative's command hub (docs/ARCHITECTURE.md §4.2).
  *
- *   ┌ topbar: logo · target sector · feed chip · Monastery (3D hub) · settings ───┐
+ *   ┌ topbar: logo · target sector · Higgsfield feed chip · settings ─────────────┐
  *   │ OPERATIVE card      │ SECTOR MAP (5 sectors × 5 levels)    │ MEMORY        │
  *   │ portrait, callsign, │ a PCB-style circuit winding upward   │ FRAGMENTS     │
  *   │ rank, XP, breaches  │ from S0 to the Core                  │ (gallery)     │
@@ -30,17 +30,14 @@
  * carry a cutscene (the first level and the bosses, GAME_DESIGN §9); each one's Mission payload
  * is fetched once per app session to confirm it has a cutscene, and opens the cutscene screen.
  *
- * The Monastery: the walkable 3D hub (GAME_DESIGN §11.2) is entered from the topbar icon or N.
- * The button is hidden when the renderer has no WebGL2 (`renderer.three === null`, §11.6),
- * where this classic hub is the only hub.
- *
- * Keys: Enter deploys the current target; N enters the Monastery; O opens the command center
- * (study & fitness); arrows walk the map; Esc closes the fragment viewer (otherwise it falls
- * through to the settings menu).
+ * Keys: Enter deploys the current target; O opens the command center (study & fitness);
+ * arrows walk the map; Esc closes the fragment viewer (otherwise it falls through to the
+ * settings menu).
  */
 import { h, countUp } from '../dom.js';
 import { settings } from '../../core/settings.js';
 import { clamp, hexToRgb } from '../../core/math.js';
+import { localDay, snapshotDay, isEarlierDay } from '../api.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const UNLOCK_DELAY_MS = 1050;
@@ -65,8 +62,6 @@ const ICON_GEAR =
 const ICON_LOCK =
   '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 7h10v7H3z" fill="currentColor"/><path d="M8 9.5v2" stroke="var(--void)" stroke-width="1.6"/></svg>';
 const ICON_CLOSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.6"/></svg>';
-const ICON_MONASTERY =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 21.2c1.9-5.1 1.9-10 .3-14.6h10.6c-1.6 4.6-1.6 9.5.3 14.6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10.4 21.2v-3.3a1.6 1.6 0 0 1 3.2 0v3.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8.1 11.2h7.8" stroke="currentColor" stroke-width="1.2" opacity=".55"/><path d="M12 6.6V2.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".75"/></svg>';
 const ICON_TRANSMISSION =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6.8v10.4l8.6-5.2z" fill="currentColor"/></svg>';
 const ICON_FRAGMENT =
@@ -110,6 +105,7 @@ export class HubScreen {
   #transmissions = new Map();
   #transmissionsLoading = new Set();
   #transmissionsFailed = new Set(); // retried on the next visit
+  #opsSnap = null; // the productivity snapshot the Daily ops card shows
 
   constructor(ctx) {
     this.#ctx = ctx;
@@ -151,7 +147,7 @@ export class HubScreen {
     const unlocked = typeof params.unlocked === 'string' ? params.unlocked : params.unlocked?.id;
     this.#build(state, unlocked);
     this.#offs.push(ctx.bus.on('state:changed', (s) => this.#update(s)));
-    this.#offs.push(ctx.bus.on('server:productivity', (snap) => this.#renderOps(snap)));
+    this.#offs.push(ctx.bus.on('server:productivity', (snap) => this.#onOpsPush(snap)));
     this.#loadOps();
   }
 
@@ -185,11 +181,6 @@ export class HubScreen {
     if ((e.key === 'o' || e.key === 'O') && !e.repeat) {
       e.preventDefault();
       this.#openOps();
-      return true;
-    }
-    if ((e.key === 'n' || e.key === 'N') && !e.repeat && this.#monasteryAvailable()) {
-      e.preventDefault();
-      this.#openMonastery();
       return true;
     }
     const step = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [1, 0], ArrowDown: [-1, 0] }[e.key];
@@ -261,17 +252,6 @@ export class HubScreen {
     const r = this.#r;
     r.sectorChip = h('div', { class: 'hub-sector' });
     r.feed = h('span', { class: 'chip hub-feed' });
-    r.monastery = h('button', {
-      class: 'icon-btn hub-monastery',
-      type: 'button',
-      'data-action': 'monastery',
-      'aria-label': 'Enter the Monastery (N)',
-      'aria-keyshortcuts': 'N',
-      title: 'Enter the Monastery · N',
-      hidden: !this.#monasteryAvailable(),
-      html: ICON_MONASTERY,
-      onclick: () => this.#openMonastery(),
-    });
     this.#renderTopbar(state, target);
     return h(
       'header',
@@ -288,7 +268,6 @@ export class HubScreen {
         'div',
         { class: 'topbar__right' },
         r.feed,
-        r.monastery,
         h('button', { class: 'icon-btn icon-btn--gear', type: 'button', 'data-action': 'settings', 'aria-label': 'Settings (Esc)', title: 'Settings · Esc', html: ICON_GEAR }),
       ),
     );
@@ -416,8 +395,26 @@ export class HubScreen {
       h('span', { class: 'kbd' }, 'O'),
       r.opsMeter,
     );
-    if (this.#ctx.productivity) this.#renderOps(this.#ctx.productivity);
+    // A cached snapshot of an earlier day is not today's: leave "Syncing…" until the GET lands.
+    this.#opsSnap = null;
+    const cached = this.#ctx.productivity;
+    const day = snapshotDay(cached);
+    if (cached && !(day && day < localDay())) this.#renderOps(cached);
     return r.ops;
+  }
+
+  /**
+   * SSE `productivity`. A push for an earlier day than the card shows is a backfill's view of
+   * that day (older servers broadcast it): keep today's numbers and re-fetch them instead.
+   */
+  #onOpsPush(snap) {
+    if (!this.#alive || !snap || typeof snap !== 'object') return;
+    if (this.#opsSnap && isEarlierDay(snap, this.#opsSnap)) {
+      this.#ctx.productivity = this.#opsSnap;
+      this.#loadOps();
+      return;
+    }
+    this.#renderOps(snap);
   }
 
   #loadOps() {
@@ -438,6 +435,7 @@ export class HubScreen {
   #renderOps(snap) {
     const r = this.#r;
     if (!r.ops || !snap || typeof snap !== 'object') return;
+    this.#opsSnap = snap;
     const study = snap.study || {};
     const goal = Number(study.goal_minutes) || 360;
     const today = Math.max(0, Number(study.today_minutes) || 0);
@@ -459,22 +457,6 @@ export class HubScreen {
     if (this.#leaving) return;
     this.#ctx.bus.emit('ui:click', {});
     this.#ctx.screens.go('productivity');
-  }
-
-  // ── the Monastery (walkable 3D hub, GAME_DESIGN §11.2) ────────────────
-
-  /** The 3D hub needs WebGL2: §11.6 sets `renderer.three` to null without it. */
-  #monasteryAvailable() {
-    const renderer = this.#ctx.renderer;
-    return !!renderer && renderer.ok !== false && renderer.three !== null;
-  }
-
-  #openMonastery() {
-    if (this.#leaving || !this.#alive || !this.#monasteryAvailable()) return;
-    this.#leaving = true;
-    this.#ctx.bus.emit('ui:click', {});
-    this.#hideTip(this.#tipNode);
-    this.#ctx.screens.go('monastery');
   }
 
   #buildDeploy() {

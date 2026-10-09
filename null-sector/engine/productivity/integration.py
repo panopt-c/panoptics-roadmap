@@ -1,6 +1,8 @@
 """Bridge the tracker to an existing GameSession without migrating its saves.
 
 Campaign XP is authoritative in Save; productivity XP is authoritative in SQLite.
+`save` is any object with `cleared`, `callsign` and `xp` (GameSession passes a copy
+taken under its lock, so no SQLite work ever runs while the session lock is held).
 The command center derives their sum without copying either award into the other
 store. Mission cinematic jobs are reconciled from durable cleared-mission records.
 """
@@ -26,14 +28,26 @@ def _attach_game(snapshot: dict, save) -> dict:
     return snapshot
 
 
+def _open(paths) -> CommandCenter:
+    return CommandCenter(paths.game_dir / "data" / "productivity.sqlite3")
+
+
 def snapshot(paths, save, on_date=None) -> dict:
-    with CommandCenter(paths.game_dir / "data" / "productivity.sqlite3") as backend:
+    with _open(paths) as backend:
         _sync_coding_rewards(backend, save)
         return _attach_game(backend.snapshot(on_date), save)
 
 
+def rewards(paths, save) -> list[dict]:
+    """Every reward payload, oldest first (GET /api/productivity/rewards)."""
+    with _open(paths) as backend:
+        _sync_coding_rewards(backend, save)
+        backend.reconcile()
+        return backend.cinematics.jobs()
+
+
 def execute(paths, save, command: str, payload: dict) -> dict:
-    with CommandCenter(paths.game_dir / "data" / "productivity.sqlite3") as backend:
+    with _open(paths) as backend:
         _sync_coding_rewards(backend, save)
         result = backend.execute(command, **payload)
         result["snapshot"] = _attach_game(result["snapshot"], save)

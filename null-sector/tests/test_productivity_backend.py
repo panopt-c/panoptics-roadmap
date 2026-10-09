@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 from engine.productivity.cinematics import CinematicRouter
-from engine.productivity.db import Database
+from engine.productivity.db import SCHEMA_VERSION, Database
 from engine.productivity.tracker import COURSES, Tracker
 
 
@@ -31,7 +31,7 @@ class BackendTests(unittest.TestCase):
 
     def test_schema_and_foreign_keys(self):
         with self.db.transaction() as conn:
-            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
             self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
             with self.assertRaises(sqlite3.IntegrityError):
                 conn.execute("INSERT INTO inventory(player_id,item_key,quantity) VALUES (999,'x',1)")

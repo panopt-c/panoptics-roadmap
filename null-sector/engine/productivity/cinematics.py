@@ -55,3 +55,17 @@ class CinematicRouter:
             self.db.require_player(conn, self.player_id)
             return [json.loads(row[0]) for row in conn.execute("""SELECT j.payload_json FROM cinematic_jobs j
                 JOIN milestones m ON m.id=j.milestone_id WHERE m.player_id=? ORDER BY m.id""", (self.player_id,))]
+
+    def recent_jobs(self, limit: int) -> list[dict]:
+        """The newest `limit` payloads, newest first (snapshots stay small; jobs() has the full history)."""
+        with self.db.transaction() as conn:
+            self.db.require_player(conn, self.player_id)
+            return [json.loads(row[0]) for row in conn.execute("""SELECT j.payload_json FROM cinematic_jobs j
+                JOIN milestones m ON m.id=j.milestone_id WHERE m.player_id=? ORDER BY m.id DESC LIMIT ?""",
+                (self.player_id, limit))]
+
+    def job_count(self) -> int:
+        with self.db.transaction() as conn:
+            self.db.require_player(conn, self.player_id)
+            return conn.execute("""SELECT COUNT(*) FROM cinematic_jobs j JOIN milestones m ON m.id=j.milestone_id
+                WHERE m.player_id=?""", (self.player_id,)).fetchone()[0]

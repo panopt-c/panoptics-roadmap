@@ -34,7 +34,9 @@ def render_dashboard(state: dict) -> Panel:
     fitness_table.add_row("CAMPAIGN XP", str(game["campaign_xp"]))
     fitness_table.add_row("PRODUCTIVITY XP", str(game["productivity_xp"]))
     fitness_table.add_row("COMBINED XP", str(game["total_xp"]))
-    fitness_table.add_row("REWARD PAYLOADS", str(len(state["cinematic_jobs"])))
+    fitness_table.add_row("REWARD PAYLOADS", str(state.get("cinematic_job_count", len(state["cinematic_jobs"]))))
+    items = sum(item.get("quantity", 1) for item in state.get("inventory", []))
+    fitness_table.add_row("ARMORY ITEMS", str(items))
     return Panel(Columns([Panel(study_table, title="MATH PROTOCOL", border_style="cyan"),
                           Panel(fitness_table, title="PHYSICAL TRAINING", border_style="magenta")], expand=True),
                  title="NULL//SECTOR COMMAND CENTER", subtitle=state["date"], border_style="cyan")
@@ -70,5 +72,8 @@ def show_command_center(console, session) -> None:
                 continue
             result = session.log_productivity(command, payload)
             console.print(Text(f"Saved. +{result['activity']['xp_awarded']} productivity XP", style="green"))
+            for item in result.get("items_granted", []):
+                name = item.get("metadata", {}).get("name", item.get("item_key", "item"))
+                console.print(Text(f"Item acquired: {name}", style="magenta"))
         except (ValueError, SessionError) as exc:
             console.print(Text(str(exc), style="red"))
