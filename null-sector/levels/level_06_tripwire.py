@@ -110,6 +110,12 @@ def need(run: Replay, name: str, keys=None):
         raise Fail(f"With {feed_text(feed, 160)}, your script never finished: a loop kept running forever.",
                    hint="Every while loop needs something inside it that eventually makes its condition False, "
                         "or a break.")
+    if isinstance(run.error, NameError) and f"'{name}'" in str(run.error):
+        raise Fail(f"With {feed_text(feed, 160)}, `{name}` was never given a value, so using it crashed "
+                   f"(NameError on line {run.line}).",
+                   hint=f"`{name}` is only created inside a branch that didn't run for these readings. "
+                        "Finish the if/elif chain with an else:, or give it a starting value before the "
+                        "loop, so it exists on every path.")
     if run.error is not None:
         where = f"line {run.line}" if run.line else "a line"
         raise Fail(f"With {feed_text(feed, 160)}, your script crashed on {where} "
@@ -193,11 +199,11 @@ MISSION = Mission(
 ━━━━━━━━╋━━━━━━━━━
         ▀""",
     briefing="""\
-The Monastery's gate seals behind you, and for the first time since you woke, nothing is
-hunting you. That lasts about an hour.
+You get one hour inside the Monastery. Warm air, lamps on chains, quiet voices, and
+nothing hunting you. Then the hour is up.
 
-**NOVA**, the Order's dispatcher, drops a trial into your visor before you've found a place
-to sit. The tripwires facing the Grid run on firmware older than the blackout. They howl at
+**NOVA**, the Order's dispatcher, drops a trial into your visor and doesn't ask if you're
+ready. The tripwires facing the Grid run on firmware older than the blackout. They howl at
 rats and wave hunters straight through.
 
 Every new arrival rewrites them. Tonight NOVA runs a simulated Grid hunter, **HUNTER.sim**,

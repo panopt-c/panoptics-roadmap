@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import copy
 import random
+import re
 
 from engine.drills import compare_cases
 from engine.mission import Cutscene, Fail, Mission
@@ -411,13 +412,13 @@ def _top_def(ctx, name: str):
 
 def _function(ctx, name: str):
     if name not in ctx.ns:
+        if ctx.crashed and "EVIDENCE" not in ctx.ns and "arbiter_verdict" not in ctx.ns:
+            raise Fail("Your script crashed before it loaded the court records (the `from tribunal import ...` line).",
+                       hint="If the error is ModuleNotFoundError, tribunal.py is missing from your missions folder. "
+                            "Deploy the mission again and the game restores it beside your file.")
         if ctx.crashed and _top_def(ctx, name):
             raise Fail(f"`{name}` is in your file, but the script crashed before Python reached it. "
                        "Fix the crash in the COMBAT LOG first.")
-        if ctx.crashed and isinstance(ctx.ns.get("__builtins__"), object) and "EVIDENCE" not in ctx.ns:
-            raise Fail("Your script crashed before it could load the court records.",
-                       hint="If the error is ModuleNotFoundError: tribunal.py is missing. Re-deploy the mission "
-                            "and the game restores it beside your file.")
         raise Fail(f"No function named `{name}` found.",
                    hint=f"Write it at the left edge:  def {name}(...):  with its body indented underneath.")
     fn = ctx.ns[name]
@@ -448,6 +449,25 @@ def _short(value) -> str:
 
 def _record(r) -> str:
     return f"{r['id']} (speed {r['speed']}, heat {r['heat']}, carrier {r['carrier']})"
+
+
+def _judge_hint(r) -> str:
+    """Why a record should have gone the other way, starting with the boundary it sits on."""
+    if r["heat"] == 32.0:
+        return "Exactly 32.0 is not COLDER than 32.0: use <, not <=."
+    if r["carrier"] == 80 and r["speed"] > 4.0:
+        return "A carrier of exactly 80 is not ABOVE 80: use >, not >=."
+    if r["speed"] == 4.0 and r["carrier"] > 80:
+        return "Exactly 4.0 m/s is not FASTER than 4.0: use >, not >=."
+    if r["hostile"] and r["heat"] < 32.0:
+        return "This one runs cold, so the first clause (heat colder than 32.0) should catch it on its own."
+    if r["hostile"]:
+        return ("Warm, but a strong carrier while moving fast: the second clause. Both parts must hold, "
+                "so join them with `and`, and join the two clauses with `or`.")
+    if r["carrier"] > 80 or r["speed"] > 4.0:
+        return ("A human. Only ONE part of the second clause is true here, and the finding needs BOTH "
+                "(carrier above 80 AND speed above 4.0). Check `and` vs `or`.")
+    return "A human. Neither clause of the finding applies, so your judge must return False."
 
 
 def _evidence_intact(ctx):
@@ -576,12 +596,8 @@ def _classify_check(ctx):
         if not isinstance(got, bool):
             raise Fail(f"classify returned {got!r} for {_record(r)}. A judge must answer True or False.",
                        hint="Return the condition itself: comparisons joined with and / or are already a bool.")
-        hint = ("This one is cold, so the first clause should catch it." if r["hostile"] and r["heat"] < 32.0 else
-                "Warm, but a strong carrier while moving fast: the second clause (both parts, with `and`)."
-                if r["hostile"] else
-                "A human. Neither clause should fire: check `and` vs `or` in the second clause.")
         raise Fail(f"classify got {len(misses)} of {len(EVIDENCE) + len(DOCKET)} cases wrong. First: {_record(r)} "
-                   f"is a {side}, but your judge said {got}.", hint=hint)
+                   f"is a {side}, but your judge said {got}.", hint=_judge_hint(r))
 
 
 @MISSION.check("STAGE II · Edge of the law — exact boundaries")
@@ -591,13 +607,8 @@ def _edges_check(ctx):
         record = {k: v for k, v in r.items() if k != "hostile"}
         got = _call("classify", fn, record)
         if got is not r["hostile"]:
-            hint = {"EDGE-HEAT": "Exactly 32.0 is not COLDER than 32.0: use <, not <=.",
-                    "EDGE-CARRIER": "A carrier of exactly 80 is not ABOVE 80: use >.",
-                    "EDGE-SPEED": "Exactly 4.0 m/s is not FASTER than 4.0: use >.",
-                    "EDGE-STILL": "A strong carrier alone isn't enough; the finding needs it WITH speed (and).",
-                    }.get(r["id"], "Translate each word of the finding into one comparison.")
             raise Fail(f"{_record(r)} sits right on the line, and your judge said {got!r} "
-                       f"(the finding says {r['hostile']}).", hint=hint)
+                       f"(the finding says {r['hostile']}).", hint=_judge_hint(r))
 
 
 @MISSION.check("STAGE II · Your judge on the stand — `order_cm`")
@@ -619,9 +630,13 @@ def _report(ctx):
         if not ctx.call_uses("print", var):
             raise Fail(f"Your report doesn't print `{var}`. The court only accepts numbers it can trace.",
                        hint="Use each variable inside the f-string, followed by :.2f")
-    if not (ctx.call_uses("print", "pardons") or ctx.call_uses("len", "pardons")):
-        raise Fail("The pardon count must come from your pardons() function, not a typed number.",
-                   hint="len(pardons(EVIDENCE)) counts the appeals.")
+    called = any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "pardons"
+                 for stmt in ctx.tree.body if not isinstance(stmt, ast.FunctionDef) for n in ast.walk(stmt))
+    typed = any(isinstance(n, ast.Constant) and isinstance(n.value, str) and re.search(r"pardons=\d", n.value)
+                for n in ast.walk(ctx.tree))
+    if not called or typed:
+        raise Fail("The pardon count must come from calling your pardons() function, not a typed number.",
+                   hint="len(pardons(EVIDENCE)) counts the appeals. Put it (or a variable holding it) in the f-string.")
     if REPORT not in ctx.stdout.splitlines():
         got = ctx.stdout.strip().splitlines()
         raise Fail(f"The court expected {REPORT!r}" + (f" but got {got[-1]!r}." if got else ", and nothing was printed."),

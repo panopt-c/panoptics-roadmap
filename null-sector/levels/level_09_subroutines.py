@@ -337,13 +337,13 @@ def _clean_check(ctx):
 @MISSION.check("Boundaries — `clamp` with defaults & keywords")
 def _clamp_check(ctx):
     _not_none(ctx, "clamp", 150)
-    compare_cases(ctx, "clamp", [(42,)], _clamp)
     try:
-        compare_cases(ctx, "clamp", [(150,), (-5,), (0,), (100,), (42.5,)], _clamp,
+        compare_cases(ctx, "clamp", [(42,), (150,), (-5,), (0,), (100,), (42.5,)], _clamp,
                       hint="With no low/high given, the defaults 0 and 100 apply: def clamp(value, low=0, high=100):")
     except Fail as fail:
         if "missing" in fail.message and "argument" in fail.message:
-            raise Fail(fail.message, hint="Give low and high default values in the def line so clamp(150) works.")
+            raise Fail(fail.message, hint="Give low and high default values in the def line, "
+                                          "def clamp(value, low=0, high=100):  so clamp(150) works on its own.")
         raise
     compare_cases(ctx, "clamp", [{"value": 150, "high": 120}, {"value": 3, "low": 5, "high": 10},
                                  {"value": 7.5, "low": 0, "high": 5}, {"value": -40, "low": -20, "high": 20},
