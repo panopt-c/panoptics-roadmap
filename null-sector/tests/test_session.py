@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -28,7 +29,7 @@ from engine.mission import Cutscene  # noqa: E402
 from engine.runner import HackReport  # noqa: E402
 from engine.session import PROFILE_EXPORTS, GameSession, SessionError, clean_callsign  # noqa: E402
 from engine.state import Paths, Save  # noqa: E402
-from levels import load_mission  # noqa: E402
+from levels import ALL_LEVELS, CAMPAIGN, load_mission  # noqa: E402
 
 L01 = load_mission("level_01_cold_boot")
 
@@ -86,6 +87,28 @@ class SnapshotTests(SandboxTestCase):
 
 
 class MissionTests(SandboxTestCase):
+    def test_story_metadata_is_available_without_mutating_content(self):
+        dialogue = {
+            "intro": [{"speaker": "ECHO", "text": "The gate is listening.", "mood": "neutral"}],
+            "victory": [{"speaker": "RUST", "text": "You're through.", "mood": "smirk"}],
+            "fail": [[{"speaker": "ECHO", "text": "Read the failed layer.", "mood": "warm"}]],
+            "crash": [[{"speaker": "ECHO", "text": "Check the trace.", "mood": "alarm"}]],
+        }
+        with mock.patch.object(L01, "dialogue", dialogue), \
+                mock.patch.object(L01, "concepts", ("variables", "types")), \
+                mock.patch.object(L01, "boss", True):
+            payload = self.session.mission("L01")
+            self.assertEqual(payload["dialogue"], dialogue)
+            self.assertEqual(payload["concepts"], ["variables", "types"])
+            self.assertIs(payload["boss"], True)
+            self.assertEqual((payload["tier"], payload["difficulty_tier"]), (0, 1))
+            json.dumps(payload)
+            payload["dialogue"]["intro"][0]["text"] = "changed by a caller"
+            payload["concepts"].append("changed")
+            again = self.session.deploy("L01")
+            self.assertEqual(again["dialogue"]["intro"][0]["text"], "The gate is listening.")
+            self.assertEqual(again["concepts"], ["variables", "types"])
+
     def test_mission_is_read_only(self):
         mission = self.session.mission("L01")
         assert_mission(self, mission)
@@ -169,9 +192,18 @@ class AccessTests(SandboxTestCase):
         self.session.deploy("L01")
         self.session.write_source("L01", SOLUTION)
         self.session.attack("L01")
-        self.assertEqual(level_status(self.session.snapshot(), "L02"), "encrypted")
-        self.assert_refused("L02", 403)
-        self.assertFalse(self.session.playable("L02"))
+        # Keep exercising encrypted content even as the real campaign grows.
+        encrypted = replace(next(level for level in ALL_LEVELS if level.id == "L02"), slug=None)
+        campaign = tuple(replace(sector, levels=tuple(encrypted if level.id == "L02" else level
+                                                      for level in sector.levels)) for sector in CAMPAIGN)
+        with mock.patch("engine.session.next_level", return_value=encrypted), \
+                mock.patch.dict("engine.session._LEVELS", {"L02": encrypted}), \
+                mock.patch("engine.session.CAMPAIGN", campaign):
+            self.assertEqual(level_status(self.session.snapshot(), "L02"), "encrypted")
+            self.assert_refused("L02", 403)
+            self.assertFalse(self.session.playable("L02"))
+            self.assertIsNone(self.session.current_playable_id())
+            self.assertEqual(self.session._next_payload()["status"], "encrypted")
         self.assertTrue(self.session.playable("L01"), "cleared levels stay playable")
         self.assertFalse(any(p.name != "level_01_cold_boot.py" for p in self.paths.missions_dir.iterdir()))
 
@@ -221,13 +253,13 @@ class CombatTests(SandboxTestCase):
         self.assertIs(reward["replay"], False)
         self.assertLessEqual(reward["breach_seconds"], L01.par_seconds)
         self.assertEqual(result["next"], {"id": "L02", "title": "SIGNAL NOISE",
-                                          "concept": "Strings & cleaning text", "status": "encrypted"})
+                                          "concept": "Strings & cleaning text", "status": "current"})
         state = result["state"]
         self.assertEqual(state["profile"], {"callsign": "Nyx", "xp": 150, "rank": "SCRIPT KIDDIE", "rank_floor": 100,
                                             "rank_next": 400, "breaches": 1, "total_levels": 25})
         self.assertEqual(state["current"], "L02")
         self.assertEqual(level_status(state, "L01"), "cleared")
-        self.assertEqual(level_status(state, "L02"), "encrypted")
+        self.assertEqual(level_status(state, "L02"), "current")
         self.assertTrue(self.session.mission("L01")["cleared"])
 
         saved = Save.load(self.paths.save_path)       # persisted, not just in memory

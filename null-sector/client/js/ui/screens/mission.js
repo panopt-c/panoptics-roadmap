@@ -161,6 +161,7 @@ export class MissionScreen {
   #alive = false;
   #id = '';
   #mission = null;
+  #introSeen = new Set();
   #editor = null;
 
   // lifecycle bookkeeping
@@ -263,13 +264,20 @@ export class MissionScreen {
     ctx.renderer?.setFocus?.(0.6);
 
     // Focus the editor once the screen is in the document and visible.
-    nextFrame().then(() => {
-      if (this.#alive && this.el.isConnected && !this.#busy) this.#editor?.focus();
+    nextFrame().then(async () => {
+      if (!this.#alive || !this.el.isConnected || this.#busy) return;
+      const id = this.#id;
+      if (!mission.cleared && !mission.attempts && !this.#introSeen.has(id)) {
+        this.#introSeen.add(id);
+        await ctx.dialogue?.play(mission.dialogue?.intro);
+      }
+      if (this.#alive && this.#id === id) this.#editor?.focus();
     });
   }
 
   async exit() {
     this.#alive = false;
+    this.#ctx.dialogue?.close?.();
     // Never lose work: capture a pending autosave (unless a conflict is waiting on the player)…
     const editor = this.#editor;
     // (A confirmed restore in flight means the player chose to discard that text.)
@@ -1197,6 +1205,11 @@ export class MissionScreen {
       await this.#victory(result, before);
       return;
     }
+    const pool = this.#mission.dialogue?.[CRASH_STATUSES.has(status) ? 'crash' : 'fail'];
+    if (status !== 'harness_error' && pool?.length) {
+      await ctx.dialogue?.play(pool[Math.max(0, this.#attempts - 1) % pool.length]);
+      if (!this.#alive) return;
+    }
     this.#setButton('idle', { retry: true, sub: status === 'harness_error' ? 'GRADER FAULT · REINJECT' : '' });
     this.#busy = false;
   }
@@ -1281,6 +1294,8 @@ export class MissionScreen {
     r.stage.classList.add('is-dead');
 
     await this.#wait(VICTORY_EXIT_MS);
+    if (!this.#alive) return;
+    await ctx.dialogue?.play(this.#mission.dialogue?.victory);
     if (!this.#alive) return;
     ctx.screens.go('victory', { mission: this.#mission, result, before });
   }

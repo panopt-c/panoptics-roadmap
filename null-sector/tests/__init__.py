@@ -114,7 +114,7 @@ HIGGSFIELD_KEYS = {"online", "reason"}
 GALLERY_KEYS = {"mission", "title", "url", "kind"}
 MISSION_KEYS = {"id", "title", "concept", "tier", "sector", "enemy", "enemy_art", "xp", "par_seconds",
                 "briefing_html", "why_html", "manual_html", "objectives", "file", "source", "attempts",
-                "elapsed", "cleared", "cutscene"}
+                "elapsed", "cleared", "cutscene", "difficulty_tier", "concepts", "boss", "dialogue"}
 MISSION_SECTOR_KEYS = {"name", "zone", "color"}
 CUTSCENE_KEYS = {"title", "narration"}
 HACK_KEYS = {"report", "attempt", "victory", "reward", "next", "state"}
@@ -162,6 +162,11 @@ def assert_mission(tc: unittest.TestCase, mission: dict) -> None:
         tc.assertIsInstance(mission[key], int, key)
     tc.assertIsInstance(mission["elapsed"], float)
     tc.assertIsInstance(mission["cleared"], bool)
+    tc.assertIsInstance(mission["difficulty_tier"], int)
+    tc.assertIsInstance(mission["boss"], bool)
+    tc.assertIsInstance(mission["concepts"], list)
+    tc.assertTrue(all(isinstance(tag, str) for tag in mission["concepts"]))
+    tc.assertIsInstance(mission["dialogue"], dict)
     for key in ("briefing_html", "why_html", "manual_html", "source", "file", "enemy", "enemy_art"):
         tc.assertIsInstance(mission[key], str, key)
     tc.assertTrue(all(isinstance(o, str) for o in mission["objectives"]))

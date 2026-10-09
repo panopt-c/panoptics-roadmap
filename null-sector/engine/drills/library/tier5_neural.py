@@ -38,7 +38,7 @@ def _ref_softmax(logits, temperature=1.0):
 
 
 def _softmax_spot(got, args, kwargs):
-    logits = args[0]
+    logits = args[0] if args else kwargs["logits"]
     temperature = kwargs.get("temperature", args[1] if len(args) > 1 else 1.0)
     total = sum(logits)
     if logits and total and near(got, [x / total for x in logits]):

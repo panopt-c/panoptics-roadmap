@@ -18,7 +18,9 @@ import textwrap
 import threading
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -27,6 +29,7 @@ from tests import (ROOT, SOLUTION, STARTER, FakeHiggsfield, SandboxTestCase, ass
                    assert_mission, assert_state, online_higgsfield)
 
 from engine.server import MAX_BODY, PORT_FALLBACKS, create_server  # noqa: E402
+from levels import ALL_LEVELS  # noqa: E402
 
 INDEX = '<!doctype html><html><head><meta name="ns-token" content="{{NS_TOKEN}}"></head><body></body></html>'
 STATIC = {
@@ -364,7 +367,7 @@ class ApiTests(ServerTestCase):
         assert_hack_result(self, win)
         self.assertEqual(win["reward"]["gained"], 150)
         self.assertEqual(win["state"]["profile"]["rank"], "SCRIPT KIDDIE")
-        self.assertEqual(win["next"]["status"], "encrypted")
+        self.assertEqual(win["next"]["status"], "current")
 
         cutscene = self.request("POST", "/api/missions/L01/cutscene").json()
         self.assertEqual(set(cutscene), {"mission", "state", "reason"})
@@ -389,8 +392,26 @@ class ApiTests(ServerTestCase):
 
     def test_encrypted_level_after_clear(self):
         self.win()
-        self.assertEqual(self.request("POST", "/api/missions/L02/deploy").status, 403)
+        encrypted = replace(next(level for level in ALL_LEVELS if level.id == "L02"), slug=None)
+        with mock.patch("engine.session.next_level", return_value=encrypted), \
+                mock.patch.dict("engine.session._LEVELS", {"L02": encrypted}):
+            response = self.request("POST", "/api/missions/L02/deploy")
+            self.assertEqual(response.status, 403)
+            self.assertIn("encrypted", response.json()["error"])
         self.assertEqual(self.request("GET", "/api/missions/L01").json()["cleared"], True)
+
+    def test_next_story_mission_deploys_with_dialogue_after_first_clear(self):
+        self.win()
+        response = self.request("POST", "/api/missions/L02/deploy")
+        self.assertEqual(response.status, 200)
+        mission = response.json()
+        assert_mission(self, mission)
+        self.assertEqual(mission["id"], "L02")
+        for event in ("intro", "victory", "fail", "crash"):
+            self.assertTrue(mission["dialogue"][event], event)
+        self.assertEqual(mission["difficulty_tier"], 1)
+        self.assertFalse(mission["boss"])
+        self.assertIn("strings", mission["concepts"])
 
     def test_keep_alive_connection_serves_several_requests(self):
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)

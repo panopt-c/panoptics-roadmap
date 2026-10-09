@@ -601,7 +601,7 @@ addEventListener('pointerdown', unlockAudio, { capture: true, passive: true });
 
 addEventListener('keydown', (e) => {
   unlockAudio();
-  if (overlay?.isOpen) return; // the overlay owns the keyboard while it is open
+  if (overlay?.isOpen || ctx.dialogue?.active) return; // overlays own the keyboard while open
   const screen = screens.active;
   if (!screen) return; // mid-transition: drop input rather than deliver it to a leaving screen
   let handled = false;

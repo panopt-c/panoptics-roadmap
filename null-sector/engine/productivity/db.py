@@ -13,11 +13,13 @@ import math
 from pathlib import Path
 import sqlite3
 from threading import RLock
+import time
 from typing import Iterator
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "productivity.sqlite3"
 SCHEMA_VERSION = 1
 XP_PER_LEVEL = 1000
+SQLITE_TIMEOUT_SECONDS = 10
 
 SCHEMA = """
 CREATE TABLE players (
@@ -149,16 +151,42 @@ class Database:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
         self._closed = False
-        self._conn = sqlite3.connect(self.path, timeout=10, isolation_level=None, check_same_thread=False)
+        self._conn = sqlite3.connect(self.path, timeout=SQLITE_TIMEOUT_SECONDS, isolation_level=None, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         try:
             self._conn.execute("PRAGMA foreign_keys = ON")
-            self._conn.execute("PRAGMA busy_timeout = 10000")
-            self._conn.execute("PRAGMA journal_mode = WAL")
+            self._conn.execute(f"PRAGMA busy_timeout = {SQLITE_TIMEOUT_SECONDS * 1000}")
+            self._enable_wal()
             self._migrate()
         except BaseException:
             self._conn.close()
             raise
+
+    def _enable_wal(self) -> None:
+        """Retry WAL initialization locks that can bypass SQLite's busy handler.
+
+        Separate processes may open a new database simultaneously. Only SQLite
+        BUSY/LOCKED errors are transient here; preserve other failures immediately.
+        Do not start another attempt after the deadline. Each SQLite call also
+        retains the connection's bounded busy timeout.
+        """
+        deadline = time.monotonic() + SQLITE_TIMEOUT_SECONDS
+        delay = 0.01
+        while True:
+            try:
+                self._conn.execute("PRAGMA journal_mode = WAL")
+                return
+            except sqlite3.OperationalError as exc:
+                code = getattr(exc, "sqlite_errorcode", 0)
+                if code & 0xFF not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise
+                time.sleep(min(delay, remaining))
+                if time.monotonic() >= deadline:
+                    raise
+                delay = min(delay * 2, 0.1)
 
     def _migrate(self) -> None:
         # Serialize version inspection as well as schema creation across processes.
