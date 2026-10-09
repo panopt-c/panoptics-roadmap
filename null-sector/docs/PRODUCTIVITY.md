@@ -72,11 +72,39 @@ baseline direction awards 250 XP once. Weight measurements otherwise award no XP
 These are game rules. Missing measurements remain unknown, and no real user logs
 are seeded by tests.
 
+Weight goal direction is fixed by the first measurement ever logged (insertion
+order) compared with the target: above it means *lose*, below it means *gain*.
+Backfilling older weigh-ins never flips it. The baseline is the earliest-dated
+measurement on the starting side of the target, and only measurements dated on or
+after the baseline can reach the goal, so logging old history can never award the
+goal by itself. `weight_history` is chronological (date, then insertion).
+
+Armory: milestones drop items. A completed daily math objective drops a Focus Chip,
+3/7/30-day study streaks drop an Overclock Module, Neural Lattice and Core Key, the
+first workout drops Training Wraps, the weight goal drops a Target Lock, and every
+cleared coding mission drops a Breach Shard. Each milestone drops exactly once
+(recorded in `item_grants`, schema version 2), including milestones from before
+items existed. Inventory rows carry `metadata` with `name`, `rarity`, `icon` and
+`description`. Activity writes report new drops in `items_granted`.
+
+Field limits (one table, `tracker.LIMITS`, also sent as `snapshot.limits`):
+`minutes` 1–1440 (and at most 1440 per kind per day), `sets` 1–1000, `reps`
+1–10000, `load_lbs` 0–2000, `distance_miles` 0–500, `weight_lbs` 50–800. Optional
+fields are omitted or `null` when not measured; **0 sets or reps is rejected**
+(400 "… leave it empty if you did not count it"), so forms send nothing instead.
+Free text (`activity`, `topic`, `note`, `habit_key`, `request_id`) that holds a lone
+UTF-16 surrogate is rejected with a 400; the CLI repairs non-UTF-8 argv bytes to
+U+FFFD. Version-1 databases holding such text are repaired on open.
+
 Reuse the same nonempty `request_id`, date and payload when retrying a submission.
 It returns the original activity without another award. Reusing an ID with a
 different payload is an error. When no ID is supplied, the call creates a new log.
+A retry that omits `on_date` matches the day the original was filed under, so a
+retry that lands after midnight still returns the original (clients should still
+send `on_date`, resolved once at first submit).
 Historical `on_date` values use `YYYY-MM-DD`. Defaults use the computer's local
-calendar date, and audit timestamps use UTC. Split cross-midnight blocks by day.
+calendar date, and audit timestamps use UTC. Today is always accepted; future
+dates are rejected. Split cross-midnight blocks by day.
 Current streaks count yesterday until today's objective is met.
 
 ## API and direct integration
@@ -87,16 +115,29 @@ these routes.
 
 | Route | Result |
 | --- | --- |
-| `GET /api/productivity` | Full tracker snapshot plus XP breakdown |
+| `GET /api/productivity` | Today's tracker snapshot plus XP breakdown (recent milestones and reward payloads only) |
 | `POST /api/productivity/study` | `course`, `minutes`, optional `topic`, `on_date`, `request_id` |
 | `POST /api/productivity/workout` | `activity`, `minutes`, optional `sets`, `reps`, `load_lbs`, `distance_miles`, `note`, `on_date`, `request_id` |
 | `POST /api/productivity/weight` | `weight_lbs`, optional `on_date`, `request_id` |
 | `POST /api/productivity/habit` | `habit_key`, `value`, optional `note`, `on_date` |
-| `GET /api/productivity/rewards` | Persistent cinematic JSON payloads |
+| `GET /api/productivity/rewards` | Every persistent cinematic JSON payload, oldest first |
 
-Activity writes return `{activity, snapshot}` and publish a `productivity` event
-on the existing event stream. Habit writes replace a daily value and return a
-null activity. Invalid payloads return HTTP 400. The direct Python API is
+Activity writes return `{activity, snapshot, items_granted}` and publish a
+`productivity` event on the existing event stream. The returned snapshot is always
+for **today** (the real local date): `on_date` only chooses which day an entry is
+filed under, never which day the dashboard shows. Habit writes replace a daily
+value and return a null activity (a `request_id` is accepted and ignored).
+
+Snapshots stay small: `milestones` holds the newest 20 (newest first) and
+`milestone_counts` the totals per category (`study`, `fitness`, `coding`, `total`);
+`cinematic_jobs` holds the newest 20 payloads (newest first) and
+`cinematic_job_count` the total. The full history is `GET /api/productivity/rewards`.
+
+Invalid payloads return HTTP 400 with a plain message: unknown fields
+(`unknown field for study: extra`), missing fields (`missing required field for
+study: minutes`), out-of-range values, or a body that is not valid JSON. A busy or
+unreadable database returns 503 (retryable); the campaign API stays responsive
+meanwhile because SQLite work never holds the game session's lock. The direct Python API is
 `GameSession.productivity_snapshot()` and `GameSession.log_productivity(command,
 payload)`. Both HTTP and Rich TUI handlers call these same methods.
 

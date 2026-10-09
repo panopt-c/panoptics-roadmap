@@ -450,9 +450,11 @@ class CommandCenterBrowserTests(unittest.TestCase):
         self.backend.snapshot = copy.deepcopy(EMPTY_SNAPSHOT)
         self.open_command_center()
         self.assertIn("No weigh-ins yet", self.text(".ops-chart"))
-        # Gear only exists when a reward grants it: the copy says so, and promises no drop table.
+        # Gear drops from milestones (tracker.py ITEM_DROPS): the copy names the reachable ones.
         self.assertIn("No gear yet", self.text(".ops-items"))
-        self.assertIn("When a reward grants gear", self.text(".ops-items"))
+        self.assertIn("Milestones drop gear", self.text(".ops-items"))
+        self.assertIn("first workout", self.text(".ops-items"))
+        self.assertIn("clear a mission", self.text(".ops-items"))
         self.assertIn("No milestones", self.text(".ops-milestones"))
         self.assertIn("No activity yet", self.text(".ops-feed"))
         self.assertIn("Log a weigh-in", self.text(".ops-weight__togo"))
@@ -572,6 +574,57 @@ class CommandCenterBrowserTests(unittest.TestCase):
         self.assertIn("Precalculus cleared", self.text(".ops-milestone"))  # in progress first
         self.assertIn("Daily goal 040", self.text(".ops-milestone:nth-child(2)"))  # then newest achieved
         self.assertIn("+21 earlier milestones", self.text(".ops-milestones__more"))
+
+    def test_server_milestone_shape_newest_first_with_counts(self):
+        # The real tracker sends its newest 20 milestones (id DESC) plus milestone_counts.
+        snap = copy.deepcopy(BASE_SNAPSHOT)
+        snap["milestones"] = [{"id": i, "key": f"study-goal:{i}", "title": f"Daily goal {i:03d}", "category": "study",
+                               "achieved_at": f"{day(0)}T10:00:00"} for i in range(45, 25, -1)]
+        snap["milestone_counts"] = {"study": 45, "fitness": 0, "coding": 0, "total": 45}
+        snap["inventory"] = [{"item_key": "focus_chip", "quantity": 45,
+                              "metadata": {"name": "Focus Chip", "rarity": "uncommon", "icon": "\u25c8",
+                                           "description": "Compiled from a completed daily math objective."}}]
+        self.backend.snapshot = snap
+        self.open_command_center()
+        rows = self.page.locator(".ops-milestone")
+        self.assertEqual(rows.count(), 20)
+        self.assertIn("Daily goal 045", self.text(".ops-milestone:nth-child(1)"))  # newest stays first
+        self.assertIn("Daily goal 026", self.text(".ops-milestone:nth-child(20)"))
+        self.assertIn("+25 earlier milestones", self.text(".ops-milestones__more"))
+        self.assertIn("Focus Chip", self.text(".ops-items"))
+        self.assertIn("45 items", self.text(".ops-armory"))
+
+    def test_short_milestone_list_has_no_overflow_row(self):
+        snap = copy.deepcopy(BASE_SNAPSHOT)
+        snap["milestones"] = [{"id": 2, "key": "coding:L01", "title": "Mission L01 cleared", "category": "coding", "achieved_at": f"{day(0)}T10:00:00"},
+                              {"id": 1, "key": "first-workout", "title": "Training protocol activated", "category": "fitness", "achieved_at": f"{day(0)}T09:00:00"}]
+        snap["milestone_counts"] = {"study": 0, "fitness": 1, "coding": 1, "total": 2}
+        self.backend.snapshot = snap
+        self.open_command_center()
+        self.assertEqual(self.page.locator(".ops-milestone").count(), 2)
+        self.assertEqual(self.page.locator(".ops-milestones__more").count(), 0)
+        self.assertNotIn("null", self.text(".ops-milestones"))
+        self.assertNotIn("null", self.text(".ops-armory"))
+
+    def test_form_follows_the_servers_limit_table(self):
+        snap = copy.deepcopy(BASE_SNAPSHOT)
+        snap["limits"] = {"minutes": [1, 1440], "sets": [1, 50], "reps": [1, 10000], "load_lbs": [0, 2000],
+                          "distance_miles": [0, 500], "weight_lbs": [50, 800]}
+        self.backend.snapshot = snap
+        self.open_command_center()
+        page = self.page
+        page.keyboard.press("2")
+        page.fill("#ops-workout-activity", "Strength")
+        page.fill("#ops-workout-minutes", "30")
+        page.fill("#ops-workout-sets", "60")
+        page.click("#ops-form-workout .ops-form__submit")
+        self.wait_status("workout", "Fix the highlighted fields")
+        self.assertIn("1–50", self.text("#ops-workout-sets-err"))
+        self.assertEqual(self.backend.posts, [])
+        page.fill("#ops-workout-sets", "5")
+        page.click("#ops-form-workout .ops-form__submit")
+        self.wait_status("workout", "+30 XP")
+        self.assertEqual(self.backend.posts[-1][1]["sets"], 5)
 
     def test_keyboard_navigation(self):
         self.open_command_center()

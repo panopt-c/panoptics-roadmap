@@ -149,6 +149,32 @@ class CrossProcessSaveTests(SandboxTestCase):
         self.assertEqual(renderer_save.xp, 150)
 
 
+class CampaignPathTests(SandboxTestCase):
+    """deploy -> edit -> reset -> hack -> victory, through the session the web and the TUI share."""
+
+    def write_mission(self, text: str) -> None:
+        self.mission_file().parent.mkdir(parents=True, exist_ok=True)
+        self.mission_file().write_text(text, encoding="utf-8")
+
+    def test_victory_reward_lets_the_client_derive_the_profile_before_it(self):
+        """The reward screen derives xp_before = state.xp - gained; that must hold on first clears."""
+        self.write_mission(SOLUTION)
+        result = self.session.attack("L01")
+        reward = result["reward"]
+        self.assertEqual(result["state"]["profile"]["xp"] - reward["gained"], 0)
+        self.assertEqual(reward["rank_before"], "GHOST PROCESS")
+
+    def test_reset_then_hack_restores_a_playable_starter(self):
+        self.session.deploy("L01")
+        self.write_mission(BUGGY)
+        self.assertEqual(self.session.reset("L01")["source"], self.mission_file().read_text(encoding="utf-8"))
+        result = self.session.attack("L01")
+        self.assertFalse(result["victory"])
+        self.assertEqual(result["attempt"], 1)
+        self.write_mission(SOLUTION)
+        self.assertTrue(self.session.attack("L01")["victory"])
+
+
 class SaveFileTests(SandboxTestCase):
     def test_empty_save_does_not_stop_launch(self):
         self.paths.save_path.write_text("", encoding="utf-8")
@@ -156,6 +182,7 @@ class SaveFileTests(SandboxTestCase):
         self.assertEqual(session.snapshot()["profile"]["xp"], 0)
         notices = session.take_notices()
         self.assertTrue(any("save.json could not be read" in n and "Starting a fresh save" in n for n in notices))
+        self.assertTrue(any("(the file is empty)" in n for n in notices), notices)
         kept = list(self.root.glob("save.json.corrupt-*"))
         self.assertEqual(len(kept), 1)
         self.assertEqual(kept[0].read_text(encoding="utf-8"), "")
@@ -246,7 +273,13 @@ class WatcherStateEventTests(ServerTestCase):
         self.mission_file().parent.mkdir(parents=True, exist_ok=True)
         self.mission_file().write_text(SOLUTION, encoding="utf-8")
         run_child('GameSession(paths).attack("L01")', self.root)
-        _name, event = stream.next("state", timeout=10)
+        # The child's attempt counter is saved before its clear, so an earlier `state` event
+        # (xp 0, one more attempt) may arrive first; the clear must follow within the timeout.
+        deadline = time.monotonic() + 10
+        while True:
+            _name, event = stream.next("state", timeout=max(0.1, deadline - time.monotonic()))
+            if event["profile"]["xp"]:
+                break
         self.assertEqual((event["profile"]["xp"], event["profile"]["callsign"]), (150, "Nyx"))
         self.assertEqual(self.request("GET", "/api/state").json()["profile"]["xp"], 150)
 

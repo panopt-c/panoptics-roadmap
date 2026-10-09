@@ -93,8 +93,30 @@ Thread-safe (one `threading.RLock` around every public method). Owns `config`
 | `reset(id)` | `{"source": str}` |
 | `playable(id)` | bool — cleared levels and the current level are playable; nothing else |
 
-Raises `SessionError(status: int, message: str)` for unknown/locked/encrypted missions (404/403).
+Raises `SessionError(status: int, message: str)` for unknown/locked/encrypted missions (404/403),
+and 503 when save.json is busy in another process for too long or cannot be written.
 Replaying a cleared mission is allowed and grants no XP (`reward.replay = true`).
+
+**Shared save (cross-process safety).** save.json is shared by every NULL//SECTOR process
+(the web server, `game.py tui`, `hack`, `watch`). `Save` (`engine/state.py`) treats it like a
+tiny database:
+
+* Every public `GameSession` method first adopts changes another process wrote
+  (`Save.refresh()`: a `stat` when nothing changed; a re-read *in place* otherwise, because the
+  cutscene renderer and the TUI hold references to the same `Save`).
+* Every mutation is a locked read-modify-write (`Save.transaction()`): an OS lock on the
+  sidecar `save.json.lock` (`fcntl.flock` on POSIX, `msvcrt.locking` on Windows), re-read,
+  change, write. A clear made in the terminal is never overwritten by a stale web session,
+  and "first clear" is decided against the file on disk, so two windows can never both pay out.
+* The lock is held for milliseconds; it is never held while player code is graded.
+* Writes are durable: temp file, `fsync`, `os.replace`, `fsync` of the folder.
+* Top-level keys this version does not know are preserved on write.
+* A damaged save.json (empty, not JSON, not an object) never stops a launch: it is moved aside
+  as `save.json.corrupt-<YYYYmmdd-HHMMSS>` and the game starts fresh with a notice (printed by
+  the TUI and the server). Damage found mid-session is repaired by writing back the progress
+  held in memory. Fields with the wrong shape are reset individually, keeping the rest.
+* The productivity tracker's SQLite work never runs under the session lock: it gets a copy of
+  the campaign values it needs (`cleared`, `callsign`, `xp`).
 
 ### 3.2 Server (`engine/server.py`)
 
@@ -113,6 +135,10 @@ Security model (the server can execute code, so this is not optional):
    server never approves, so other websites cannot forge requests.
 4. Static files are resolved and must stay inside their root (no `..` traversal).
 5. Request bodies are capped at 1 MB.
+6. A body that is not valid JSON (bad UTF-8, malformed, integers too long to convert,
+   absurd nesting) is a 400 `{"error": "body is not valid JSON"}`; no request input can
+   produce a traceback or leak Python call signatures. Responses are encoded so that they
+   can never fail (text that is not valid UTF-8 falls back to ASCII `\u` escapes).
 
 ### 3.3 HTTP API
 
@@ -196,10 +222,16 @@ On victory with Higgsfield online, the server immediately queues the cutscene re
 | `hello` | `{"server_time": float}` |
 | `file` | `{"mission": "L01", "source": str, "mtime": float}` — mission file changed on disk by something other than the client's own `PUT` |
 | `cutscene` | `{"mission": "L01", "state": "rendering\|done\|failed\|offline", "stage": "still\|video", "url"?: str, "kind"?: "image\|video", "error"?: str}` |
-| `state` | `State` — profile changed |
+| `state` | `State` — profile changed (after a hack through the API, or when another process — `game.py tui`, `hack`, `watch` — saved progress to save.json) |
+| `productivity` | Command center snapshot — an activity was logged (docs/PRODUCTIVITY.md) |
 
 A `: keepalive` comment is sent every 15 s. A watcher thread polls the current
 mission file's mtime every 300 ms; writes made through `PUT` are suppressed by content hash.
+The same thread checks save.json's signature and publishes `state` when another process
+changed it (its own writes are not echoed).
+
+`PUT /api/missions/:id/source`: CRLF/CR become LF; a lone UTF-16 surrogate (half an emoji)
+becomes U+FFFD instead of failing the save.
 
 ---
 

@@ -285,6 +285,8 @@ def load_config(paths: Paths | None = None, notices: list | None = None) -> dict
 
 
 def _reason(exc: BaseException) -> str:
+    if isinstance(exc, json.JSONDecodeError) and not exc.doc.strip():
+        return "the file is empty"
     if isinstance(exc, json.JSONDecodeError):
         return f"invalid JSON at line {exc.lineno}, column {exc.colno}"
     if isinstance(exc, UnicodeDecodeError):

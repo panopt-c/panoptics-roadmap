@@ -70,6 +70,23 @@ export const LIMITS = Object.freeze({
   activity: 80,
   note: 500,
 });
+/**
+ * LIMITS with the server's own numeric bounds (`snap.limits`, {field: [min, max]}) applied when
+ * the snapshot carries them, so the form can never drift from the rule that actually decides.
+ */
+export function limitsFrom(snap) {
+  const out = { ...LIMITS };
+  const server = snap && typeof snap === 'object' ? snap.limits : null;
+  if (!server || typeof server !== 'object') return out;
+  for (const name of ['minutes', 'sets', 'reps', 'load_lbs', 'distance_miles', 'weight_lbs']) {
+    const pair = server[name];
+    if (Array.isArray(pair) && pair.length === 2 && pair.every((n) => typeof n === 'number' && Number.isFinite(n)) && pair[0] <= pair[1]) {
+      out[name] = { min: pair[0], max: pair[1] };
+    }
+  }
+  return out;
+}
+
 const RING_R = 52;
 const RING_C = 2 * Math.PI * RING_R;
 
@@ -213,6 +230,8 @@ export function describeActivity(activity) {
 
 const itemName = (item) => String(item?.name ?? item?.title ?? item?.metadata?.name ?? item?.item_key ?? item?.item ?? item?.id ?? 'Unknown item').replaceAll('_', ' ');
 const itemQty = (item) => num(item?.quantity ?? item?.qty ?? item?.count, 1);
+/** Sort key for an achieved milestone: its numeric id (insertion order), else list position. */
+const milestoneOrder = (m, index) => (Number.isFinite(Number(m?.id)) && m?.id !== null && m?.id !== '' ? Number(m.id) : index);
 const milestoneDone = (m) => Boolean(m?.achieved ?? m?.unlocked ?? m?.completed ?? m?.earned ?? m?.achieved_at ?? m?.unlocked_at);
 const safeRarity = (r) => (/^[a-z_-]{1,24}$/i.test(String(r ?? '')) ? String(r).toLowerCase() : 'common');
 
@@ -830,7 +849,7 @@ export class ProductivityScreen {
     this.#renderChart(fitness.weight_history, target);
 
     this.#renderInventory(snap.inventory);
-    this.#renderMilestones(snap.milestones);
+    this.#renderMilestones(snap.milestones, snap.milestone_counts);
     this.#renderHabits(snap.habits);
     this.#renderFeed(snap.recent_activity);
     this.#renderJobs(snap.cinematic_jobs, snap.milestones);
@@ -924,9 +943,11 @@ export class ProductivityScreen {
     const total = items.reduce((sum, it) => sum + itemQty(it), 0);
     r.itemCount.textContent = `${total} ${total === 1 ? 'item' : 'items'}`;
     if (!items.length) {
-      // Gear exists only when a reward grants it (Database.add_item); say exactly that, and
-      // never imply a drop table the tracker does not have.
-      r.inventory.replaceChildren(h('li', { class: 'ops-empty' }, 'No gear yet. When a reward grants gear, it is stocked here.'));
+      // Gear drops from milestones (engine/productivity/tracker.py ITEM_DROPS): name the ones
+      // a new player can actually reach, and nothing the tracker does not grant.
+      r.inventory.replaceChildren(
+        h('li', { class: 'ops-empty' }, 'No gear yet. Milestones drop gear: clear a mission, finish a daily math objective, log your first workout or keep a study streak going.'),
+      );
       return;
     }
     r.inventory.replaceChildren(
@@ -943,20 +964,30 @@ export class ProductivityScreen {
     );
   }
 
-  #renderMilestones(milestones) {
+  #renderMilestones(milestones, counts) {
     const list = toList(milestones);
     const r = this.#r;
     if (!list.length) {
       r.milestones.replaceChildren(h('li', { class: 'ops-empty' }, 'No milestones yet.'));
       return;
     }
-    // In progress first, then achieved newest-first; a long history is capped (the snapshot
-    // grows by one milestone per completed day) with a count of the rest.
+    // In progress first, then achieved newest-first, whatever order the snapshot uses (the
+    // server sends its newest N plus `milestone_counts`). A long history is capped with a count
+    // of the rest, which includes the ones the server left out of the snapshot.
     const open = list.filter((m) => !milestoneDone(m));
-    const achieved = list.filter((m) => milestoneDone(m)).reverse();
+    const achieved = list
+      .map((m, i) => ({ m, i }))
+      .filter(({ m }) => milestoneDone(m))
+      .sort((a, b) => milestoneOrder(b.m, b.i) - milestoneOrder(a.m, a.i) || b.i - a.i)
+      .map(({ m }) => m);
     const sorted = [...open, ...achieved];
     const shown = sorted.slice(0, MILESTONE_LIMIT);
-    const hiddenDone = sorted.length - shown.length;
+    const shownDone = shown.filter((m) => milestoneDone(m)).length;
+    const reported = Number(counts?.total);
+    const totalDone = Number.isFinite(reported) && reported > achieved.length ? reported : achieved.length;
+    const hiddenDone = Math.max(0, totalDone - shownDone);
+    // (replaceChildren is the DOM's: a null argument would render as the text "null".)
+    const more = hiddenDone > 0 ? [h('li', { class: 'ops-empty ops-milestones__more' }, `+${hiddenDone} earlier ${hiddenDone === 1 ? 'milestone' : 'milestones'}`)] : [];
     r.milestones.replaceChildren(
       ...shown.map((m) => {
         const done = milestoneDone(m);
@@ -975,7 +1006,7 @@ export class ProductivityScreen {
           h('span', { class: 'visually-hidden' }, done ? 'achieved' : 'in progress'),
         );
       }),
-      hiddenDone > 0 ? h('li', { class: 'ops-empty ops-milestones__more' }, `+${hiddenDone} earlier ${hiddenDone === 1 ? 'milestone' : 'milestones'}`) : null,
+      ...more,
     );
   }
 
@@ -1090,6 +1121,7 @@ export class ProductivityScreen {
     const value = (name) => String(form.elements.namedItem(name)?.value ?? '').trim();
     const errors = [];
     const payload = {};
+    const L = limitsFrom(this.#snap);
     const intField = (name, label, { min, max, required }) => {
       const raw = value(name);
       if (!raw) {
@@ -1127,18 +1159,18 @@ export class ProductivityScreen {
       const course = value('course');
       if (!COURSES.includes(course)) errors.push(['course', 'Pick a course.']);
       else payload.course = course;
-      intField('minutes', 'Minutes', { ...LIMITS.minutes, required: true });
-      textField('topic', 'Topic', { max: LIMITS.topic });
+      intField('minutes', 'Minutes', { ...L.minutes, required: true });
+      textField('topic', 'Topic', { max: L.topic });
     } else if (kind === 'workout') {
-      textField('activity', 'Activity', { max: LIMITS.activity, required: true });
-      intField('minutes', 'Minutes', { ...LIMITS.minutes, required: true });
-      intField('sets', 'Sets', LIMITS.sets);
-      intField('reps', 'Reps', LIMITS.reps);
-      decField('load_lbs', 'Load', LIMITS.load_lbs);
-      decField('distance_miles', 'Distance', LIMITS.distance_miles);
-      textField('note', 'Note', { max: LIMITS.note });
+      textField('activity', 'Activity', { max: L.activity, required: true });
+      intField('minutes', 'Minutes', { ...L.minutes, required: true });
+      intField('sets', 'Sets', L.sets);
+      intField('reps', 'Reps', L.reps);
+      decField('load_lbs', 'Load', L.load_lbs);
+      decField('distance_miles', 'Distance', L.distance_miles);
+      textField('note', 'Note', { max: L.note });
     } else if (kind === 'weight') {
-      decField('weight_lbs', 'Weight', { ...LIMITS.weight_lbs, required: true });
+      decField('weight_lbs', 'Weight', { ...L.weight_lbs, required: true });
     }
 
     const date = value('on_date');
