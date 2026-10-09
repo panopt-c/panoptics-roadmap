@@ -46,6 +46,8 @@ CONCEPTS = (
     "comprehensions", "functions", "sorting", "recursion", "classes", "inheritance", "files",
     "exceptions", "json", "parsing", "regex", "sql", "algorithms", "generators", "decorators",
     "numeric", "ml-math", "neural-nets", "apis", "agents",
+    # THE LAB (GAME_DESIGN §13)
+    "numpy", "pandas", "statistics", "evaluation", "nlp",
 )
 
 DRILL_XP = {1: 40, 2: 60, 3: 85, 4: 110, 5: 140}       # first clear of a seed

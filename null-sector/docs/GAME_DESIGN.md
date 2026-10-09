@@ -587,3 +587,42 @@ ui/screens/monastery.js  MonasteryScreen — input (WASD/arrows, Shift, mouse or
   3D-anchored prompt, minimal HUD; renderer.setScene(monastery) on enter, setScene(null) on exit.
 Boot goes to "monastery" unless settings.classicHub is on or renderer.three is null, in which case it goes to "hub".
 ```
+
+---
+
+## 13. THE LAB — the Order's machine-learning school (`lab/`)
+
+A second, parallel mode next to the campaign: a structured ML curriculum in six tracks, taught in
+the Monastery's Scriptorium Lab by **MOTHER ADA** (`ada`, colour `#c792ea`), the Order's eldest
+engineer. Before the Null Event she trained models for a living; now she teaches the craft so
+nobody builds another Core blind. Voice: calm, Socratic, exact, dry warmth; she asks "why?"
+before "how". Each track is also a chapter of the Lab's side story, **The Lost Curriculum**: Ada
+is rebuilding the Order's ML canon, burned in the Null Event, one lesson at a time, and each
+capstone restores a chapter (and reveals what the old world got wrong about learning machines).
+
+| Track | Name | Teaches | Opens when cleared (any) | Libraries |
+|---|---|---|---|---|
+| PY | DATA RITES | comprehensions, Counter/defaultdict, sorting keys, csv, statistics by hand, cleaning | L05 | stdlib |
+| NP | TENSOR SUTRAS | arrays, masks, broadcasting, vectorization, matmul/linalg, seeded RNG | PY07 or L10 | numpy |
+| DA | ARCHIVE OF NOISE | DataFrames, missing values, groupby, joins, one-hot/scaling, leak-free splits | NP03 or L15 | pandas |
+| ML | ORACLE'S APPRENTICE | linear/logistic regression, gradient descent, metrics, cross-validation, regularization | NP07 or L20 | numpy |
+| DL | NEURAL LITURGY | scalar autograd, backprop, MLP, stable softmax/CE, optimizers, training loops | ML07 or L23 | numpy |
+| AI | LANGUAGE OF GODS | BPE tokenization, embeddings, attention, bigram LM sampling, retrieval, evals | DL07 or L25 | numpy |
+
+* **Registry**: `lab/__init__.py` (`TRACKS`, `find`, `playable`, `missing_requirements`,
+  `load_mission`). Ids are track code + number (`NP03`); files are `lab/<code><nn>_<name>.py`
+  exposing `MISSION`, graded with key `lab:<slug>`. Missions are ordinary `Mission`s with
+  `requires=("numpy",)` etc. when they need a library.
+* **Access**: a track opens when any gate id is cleared; every built mission in an open track
+  is playable in any order; the capstone opens after 4 of the track's missions.
+* **Progress**: clears live in `save.cleared` under the Lab id and add XP like campaign levels.
+  XP: PY 120, NP 160, DA 200, ML 260, DL 320, AI 380; capstones ×1.5. Mastery tags come from
+  `engine.drills.CONCEPTS` (which gained `numpy pandas statistics evaluation nlp`).
+* **Teaching bar** (on top of §2.1): every mission's `why` names where this exact skill shows up
+  in real ML work; `manual` teaches with small runnable examples and one common mistake; checks
+  call the player's functions on fresh randomized inputs and compare with a reference
+  (tolerances for floats), so hard-coding can't pass. Missions compare against the "real"
+  library behaviour where one exists (e.g. `np.linalg.lstsq`, `pandas.get_dummies`) and the
+  manual shows the PyTorch / scikit-learn equivalent so the skill transfers.
+* **Story**: each mission has `dialogue` (Ada-led; CIPHER, RUST, NOVA and VEX can appear);
+  each capstone has a `cutscene` restoring a chapter of the Lost Curriculum.

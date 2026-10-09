@@ -11,4 +11,7 @@ pygments>=2.13
 # Official Higgsfield SDK — cinematic cutscenes (optional: the game runs without it)
 higgsfield-client>=0.2
 
-# Later sectors will add: requests, beautifulsoup4 (Data Tier), numpy (Hero Tier)
+# THE LAB (machine-learning school, docs/GAME_DESIGN.md §13). The campaign itself needs neither;
+# Lab missions that use them show "pip install numpy pandas" until they're installed.
+numpy>=1.26
+pandas>=2.1

@@ -83,6 +83,7 @@ class Mission:
     assets: dict[str, str] = field(default_factory=dict)      # filename -> text, written beside the mission file
     dialogue: dict[str, list] = field(default_factory=dict)   # GAME_DESIGN §5.2
     grader_key: str = ""       # what the harness loads; defaults to slug (drills use "drill:<id>:<seed>")
+    requires: tuple[str, ...] = ()   # third-party modules the player's code needs (e.g. "numpy"); see lab/
 
     def check(self, name: str):
         def register(fn):

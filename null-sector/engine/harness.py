@@ -41,7 +41,10 @@ def json_safe(value):
 
 
 def load_for_grading(key: str):
-    """A campaign slug, or `drill:<drill_id>:<seed>` for a procedural drill instance."""
+    """A campaign slug, `lab:<slug>` for a Lab mission, or `drill:<drill_id>:<seed>` for a drill instance."""
+    if key.startswith("lab:"):
+        from lab import load_mission as load_lab
+        return load_lab(key[4:])
     if key.startswith("drill:"):
         from engine.drills import instance
         _, drill_id, seed = key.split(":", 2)
