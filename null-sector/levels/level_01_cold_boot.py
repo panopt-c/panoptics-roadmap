@@ -143,6 +143,27 @@ scrap_total = scrap_from_crate + 8
         camera="slow dolly-in toward the face as the visor flickers on",
         anchor=True,
     ),
+    tier=1,
+    concepts=("variables", "types"),
+    dialogue={
+        "intro": [
+            {"speaker": "cipher", "text": "You're awake. Good. I'm CIPHER, the only thing still running in your visor.", "mood": "neutral"},
+            {"speaker": "cipher", "text": "WATCHDOG deletes anything without an identity. Give it one: a name, some numbers, a status. In code.", "mood": "alarm"},
+            {"speaker": "cipher", "text": "Every value you store is a variable. Start there. I'll read the errors with you.", "mood": "warm"},
+        ],
+        "crash": [
+            [{"speaker": "cipher", "text": "Crash. Not fatal. Read the last line of the error first: Python tells you what it couldn't do.", "mood": "neutral"}],
+            [{"speaker": "cipher", "text": "The line number in the combat log is where it broke. Start reading there, then look one line up.", "mood": "neutral"}],
+        ],
+        "fail": [
+            [{"speaker": "cipher", "text": "The script ran, but WATCHDOG isn't convinced. Check the first red layer. Types matter: 12 and \"12\" are different.", "mood": "neutral"}],
+            [{"speaker": "cipher", "text": "Close. Compare what the hint asks for with what you stored. Exact names, exact types.", "mood": "warm"}],
+        ],
+        "victory": [
+            {"speaker": "cipher", "text": "Identity registered, {callsign}. WATCHDOG has moved on.", "mood": "warm"},
+            {"speaker": "cipher", "text": "There's a signal on the wire. Someone out there is still broadcasting. Let's find out who.", "mood": "neutral"},
+        ],
+    },
 )
 
 

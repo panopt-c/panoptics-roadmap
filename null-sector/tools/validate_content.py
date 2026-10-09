@@ -74,6 +74,10 @@ def validate_mission(mission: object, *, campaign: bool) -> list[str]:
             errors.append(f"{name} must be a positive integer")
     if type(mission.tier) is int and not 1 <= mission.tier <= 5:
         errors.append("tier must be between 1 and 5")
+    from engine.drills import CONCEPTS   # the fixed mastery tags (GAME_DESIGN §3.3)
+    unknown = [tag for tag in mission.concepts if tag not in CONCEPTS]
+    if unknown or not mission.concepts:
+        errors.append(f"concepts must be non-empty mastery tags from engine.drills.CONCEPTS; unknown: {unknown}")
     if (type(mission.timeout) not in (int, float) or not math.isfinite(mission.timeout)
             or not 0 < mission.timeout <= 20):
         errors.append("timeout must be finite and between 0 and 20 seconds")
@@ -100,6 +104,8 @@ def mission_fingerprint(mission) -> str:
     def encode(value):
         if isinstance(value, random.Random):
             return {"random_state": encode(value.getstate())}
+        if callable(value):   # reference solutions and helpers captured by checks: compare by name
+            return f"<callable {getattr(value, '__module__', '')}.{getattr(value, '__qualname__', type(value).__name__)}>"
         if hasattr(value, "__dataclass_fields__"):
             return {f.name: encode(getattr(value, f.name)) for f in fields(value)
                     if f.name not in {"checks", "fn"}}

@@ -1,5 +1,11 @@
 import { h } from './dom.js';
 
+// Speaker colours from the cast sheet (docs/GAME_DESIGN.md §5.1); bosses use the danger red.
+const SPEAKER_COLORS = {
+  cipher: '#00f0ff', vex: '#ff2bd6', rust: '#ffb000', nova: '#39ff14', oracle: '#ff3355',
+  warden: '#ff3355', arbiter: '#ff3355', forgemaster: '#ff3355', librarian: '#ff3355', core: '#ff3355',
+};
+
 /** Keyboard-accessible story sequences; native dialog keeps focus out of the editor. */
 export class DialogueOverlay {
   #dialog = null;
@@ -28,7 +34,9 @@ export class DialogueOverlay {
     h('div', { class: 'dialogue__controls' }, counter, skip, next));
     const draw = () => {
       const line = sequence[index];
-      speaker.textContent = String(line.speaker || 'cipher').toUpperCase();
+      const who = String(line.speaker || 'cipher');
+      speaker.textContent = who.toUpperCase();
+      dialog.style.setProperty('--speaker', SPEAKER_COLORS[who.toLowerCase()] || SPEAKER_COLORS.cipher);
       const callsign = String(this.ctx.state?.profile?.callsign || 'runner');
       // Callback replacement preserves literal dollars in player names; textContent prevents markup injection.
       text.textContent = line.text.replaceAll('{callsign}', () => callsign);

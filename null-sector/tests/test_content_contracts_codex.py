@@ -11,7 +11,7 @@ from tools.validate_content import asset_errors, call_worker, mission_fingerprin
 def sample():
     mission = Mission(id="L99", slug="level_99_fixture", title="Fixture", concept="types",
                       enemy="TEST", xp=100, par_seconds=60, briefing="Brief", why="Why",
-                      manual="Manual", starter="value = None", tier=1)
+                      manual="Manual", starter="value = None", tier=1, concepts=("types",))
     mission.checks = [Check(f"Check {i}", lambda ctx: None) for i in range(5)]
     return mission
 
@@ -21,6 +21,13 @@ class ContentContractTests(unittest.TestCase):
         mission = sample()
         mission.assets = {"data/input.csv": "x,y\n1,2\n", "mock_api.py": "VALUE = 1"}
         self.assertEqual(validate_mission(mission, campaign=True), [])
+
+    def test_concepts_must_be_known_mastery_tags(self):
+        for concepts in ((), ("types", "text_cleaning")):
+            with self.subTest(concepts=concepts):
+                mission = sample()
+                mission.concepts = concepts
+                self.assertTrue(any("concepts" in e for e in validate_mission(mission, campaign=True)))
 
     def test_incomplete_module_is_not_a_valid_mission(self):
         self.assertTrue(validate_mission(None, campaign=True))

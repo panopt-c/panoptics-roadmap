@@ -184,6 +184,8 @@ export class MissionScreen {
   #restoring = false;
   #restoreEcho = null; // a `server:file` that arrived while a restore was in flight
   #attempts = 0;
+  #lineAt = -Infinity;   // attempt number when CIPHER last commented on a failure
+  #linesShown = 0;
   #rows = []; // {el, icon, state, intelMsg, intelHint, seg, shards, objective}
   #artLines = [];
   #artCols = 0;
@@ -235,6 +237,8 @@ export class MissionScreen {
     if (!this.#alive) return;
     this.#mission = mission;
     this.#attempts = mission.attempts || 0;
+    this.#lineAt = -Infinity;
+    this.#linesShown = 0;
     this.#diskText = mission.source ?? '';
 
     this.#build(mission);
@@ -1142,7 +1146,7 @@ export class MissionScreen {
       this.#setButton('resolving', { done: i + 1, total });
 
       ctx.bus.emit('hack:layer', { index: i, total, passed: ok, combo: chain, x: from.x, y: from.y, tx: to.x, ty: to.y });
-      this.#log(ok ? 'ok' : 'bad', ok ? 'BREACH' : 'BLOCK', `L${pad2(i + 1)} ${ok ? 'breached' : 'blocked'} — `, check.name);
+      this.#log(ok ? 'ok' : 'bad', ok ? 'BREACH' : 'BLOCK', `Layer ${pad2(i + 1)} ${ok ? 'breached' : 'blocked'} — `, check.name);
 
       combo = ok ? combo + 1 : 0;
       const gap = reducedMotion ? 70 : Math.max(LAYER_GAP_MIN_MS, LAYER_GAP_MS - combo * LAYER_ACCEL_MS);
@@ -1205,9 +1209,14 @@ export class MissionScreen {
       await this.#victory(result, before);
       return;
     }
-    const pool = this.#mission.dialogue?.[CRASH_STATUSES.has(status) ? 'crash' : 'fail'];
-    if (status !== 'harness_error' && pool?.length) {
-      await ctx.dialogue?.play(pool[Math.max(0, this.#attempts - 1) % pool.length]);
+    // CIPHER speaks on a crash, or once you've failed twice — then at most every third attempt,
+    // so the write → hack → fix loop is never interrupted on every try (GAME_DESIGN §8).
+    const crashed = CRASH_STATUSES.has(status);
+    const pool = this.#mission.dialogue?.[crashed ? 'crash' : 'fail'];
+    const due = this.#attempts - this.#lineAt >= 3 && (crashed || this.#attempts >= 2);
+    if (status !== 'harness_error' && pool?.length && due) {
+      this.#lineAt = this.#attempts;
+      await ctx.dialogue?.play(pool[this.#linesShown++ % pool.length]);
       if (!this.#alive) return;
     }
     this.#setButton('idle', { retry: true, sub: status === 'harness_error' ? 'GRADER FAULT · REINJECT' : '' });

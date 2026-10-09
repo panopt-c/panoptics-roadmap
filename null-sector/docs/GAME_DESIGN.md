@@ -98,14 +98,15 @@ All optional with defaults, so existing levels keep working:
 
 ```python
 tier: int = 1                         # 1..5 (§1)
-concepts: tuple[str, ...] = ()        # mastery tags (§3.3), e.g. ("strings", "slicing")
+concepts: tuple[str, ...] = ()        # mastery tags (§3.3), e.g. ("strings", "lists"); validated by tools/validate_content.py
 boss: bool = False
 assets: dict[str, str] = {}           # filename -> text, written beside the mission file if missing
 dialogue: dict[str, list[dict]] = {}  # §5.2
 ```
 
-Mission payload (`GET /api/missions/:id`) gains `tier`, `concepts`, `boss`, `dialogue`,
-`assets` (list of filenames).
+Mission payload (`GET /api/missions/:id`) gains `difficulty_tier` (this 1–5 tier), `concepts`,
+`boss` and `dialogue`. The payload's existing `tier` stays the zero-based sector index, so v1
+clients keep working.
 
 ---
 

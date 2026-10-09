@@ -6,7 +6,7 @@ RAW_SIGNAL = "  SOS::MONASTERY::SECTOR-0::GATE-7  "
 MISSION = Mission(
     id="L02", slug="level_02_signal_noise", title="SIGNAL NOISE",
     concept="Strings & cleaning text", enemy="STATIC LEECH", xp=120,
-    par_seconds=20 * 60, tier=1, concepts=("strings", "text_cleaning", "slicing"),
+    par_seconds=20 * 60, tier=1, concepts=("strings", "lists"),
     enemy_art="   .: /\\ :.\n  -- STATIC --\n   ': \\/ :'",
     briefing="""WATCHDOG's sweep fades behind you. A distress call claws through your visor:
 too loud, badly padded, its separators doubled by interference.

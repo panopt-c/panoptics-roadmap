@@ -7,13 +7,14 @@
   padding: 28px;
   color: #e6f6fa;
   background: #0a1420;
-  border: 1px solid #00f0ff;
-  box-shadow: 0 0 44px #00f0ff22;
+  border: 1px solid var(--speaker, #00f0ff);
+  box-shadow: 0 0 44px color-mix(in srgb, var(--speaker, #00f0ff) 14%, transparent);
+  transition: border-color .25s, box-shadow .25s;
   font: 16px/1.65 'JetBrains Mono', monospace;
 }
 .dialogue::backdrop { background: #030710c9; }
 .dialogue__label { color: #8299a9; font-size: 11px; letter-spacing: .16em; }
-.dialogue__speaker { margin: 12px 0; color: #00f0ff; font: 700 26px 'Chakra Petch', sans-serif; }
+.dialogue__speaker { margin: 12px 0; color: var(--speaker, #00f0ff); font: 700 26px 'Chakra Petch', sans-serif; }
 .dialogue__text { margin: 16px 0 28px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .dialogue__controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .dialogue__count { margin-right: auto; color: #8299a9; font-size: 12px; }
