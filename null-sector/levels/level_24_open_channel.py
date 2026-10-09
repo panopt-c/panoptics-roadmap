@@ -306,6 +306,10 @@ except anthropic.AuthenticationError:
 except anthropic.RateLimitError:
     print("Still rate limited after the SDK's retries.")
 ```
+
+Check `response.stop_reason` before trusting the text: on `claude-opus-5-5` a safety classifier
+can end a reply with `"refusal"`, and production code usually opts into server-side fallbacks
+(`client.beta.messages.create(..., betas=["server-side-fallback-2026-07-01"], fallbacks="default")`).
 """,
     starter='''
 """
@@ -494,6 +498,12 @@ def _send(ctx, label, body, key, expect=None, **kwargs):
         if expect and isinstance(exc, expect):
             return exc
         seen = _CACHE["mod"]._STATE["requests"]
+        if expect and len(seen) == 1 and seen[0]["status"] in (400, 401):
+            status = seen[0]["status"]
+            raise Fail(f"`{label}` raised {type(exc).__name__}: {exc}. The Oracle answered {status}, "
+                       f"so send must raise {expect.__name__}.",
+                       hint=(f"Check the status: a 401 raises PermissionError (the key is bad), any other error "
+                             f"except 429 raises ValueError. Both carry the server's error message."))
         detail = ""
         if seen:
             detail = f" The Oracle answered {[r['status'] for r in seen]}"
