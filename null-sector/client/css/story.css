@@ -1,0 +1,238 @@
+/* Story archive (hub): the prologue, five act openings and the epilogue, replayable once reached.
+   Composes the shared components (.btn, .panel, .chip, .kbd, .icon-btn); see ui/screens/hub.js. */
+
+/* ── topbar entry ─────────────────────────────────────────────────────── */
+.hub-story {
+  --accent: var(--magenta);
+  --accent-rgb: 255, 43, 214;
+  min-height: 32px;
+  padding: 0 10px 0 12px;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.hub-story__icon {
+  display: inline-flex;
+  color: var(--magenta);
+}
+
+.hub-story__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hub-story .kbd {
+  height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+}
+
+/* ── overlay ──────────────────────────────────────────────────────────── */
+.story-reel {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 7vh 16px;
+  background: rgba(3, 4, 8, 0.74);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity var(--t-med) var(--ease-out);
+}
+
+.story-reel.is-open {
+  opacity: 1;
+}
+
+.story-reel__panel {
+  --accent: var(--magenta);
+  --accent-rgb: 255, 43, 214;
+  width: min(680px, 100%);
+  max-height: 100%;
+  scale: 0.96;
+  transition: scale var(--t-slow) var(--ease-out);
+}
+
+.story-reel.is-open .story-reel__panel {
+  scale: 1;
+}
+
+.story-reel__panel .panel__head {
+  padding-right: 64px;
+}
+
+.story-reel__hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-reel__close {
+  --accent: var(--magenta);
+  --accent-rgb: 255, 43, 214;
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  z-index: 3;
+  transform: scale(0.82);
+}
+
+.story-reel__body {
+  overflow-y: auto;
+}
+
+.story-reel__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.story-reel.is-open .story-reel__item {
+  animation: rise 420ms var(--ease-out) backwards;
+  animation-delay: calc(80ms + var(--n, 0) * 45ms);
+}
+
+/* ── chapter rows ─────────────────────────────────────────────────────── */
+.story-chapter {
+  --c: 8px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto 22px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 14px;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0.015) 70%), rgba(2, 4, 8, 0.6);
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+  transition: background var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
+}
+
+.story-chapter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.3), inset 3px 0 0 rgba(var(--accent-rgb), 0.85);
+  transition: box-shadow var(--t-med) var(--ease-out);
+}
+
+.story-chapter:hover::after,
+.story-chapter:focus-visible::after {
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.95), inset 3px 0 0 var(--accent), inset 0 0 24px rgba(var(--accent-rgb), 0.22);
+}
+
+.story-chapter:focus-visible {
+  outline: none;
+}
+
+.story-chapter:active {
+  transform: scale(0.99);
+}
+
+.story-chapter__index {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.55);
+}
+
+.story-chapter__text {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.story-chapter__title {
+  overflow: hidden;
+  font: 700 13px/1.15 var(--font-display);
+  letter-spacing: 0.14em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.story-chapter__zone {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-chapter__play {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.story-chapter__play svg {
+  width: 18px;
+  height: 18px;
+}
+
+.story-chapter.is-locked {
+  cursor: not-allowed;
+  color: var(--dim);
+  background: rgba(2, 4, 8, 0.5);
+}
+
+.story-chapter.is-locked::after {
+  box-shadow: inset 0 0 0 1px rgba(136, 146, 166, 0.16);
+}
+
+.story-chapter.is-locked .story-chapter__index,
+.story-chapter.is-locked .story-chapter__play {
+  color: var(--dim);
+  text-shadow: none;
+}
+
+.story-chapter.is-locked .story-chapter__play svg {
+  width: 13px;
+  height: 13px;
+}
+
+:is(body.quality-low, body.no-webgl) .story-reel {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(3, 4, 8, 0.92);
+}
+
+body.reduce-motion .story-reel,
+body.reduce-motion .story-reel__panel {
+  transition: none;
+}
+
+body.reduce-motion .story-reel.is-open .story-reel__item {
+  animation: none;
+}
+
+@media (max-width: 1100px) {
+  .hub-story__text {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .story-chapter {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+
+  .story-chapter__index {
+    grid-column: 1 / -1;
+  }
+
+  .story-chapter__play {
+    display: none;
+  }
+
+  .story-reel__hint {
+    display: none;
+  }
+}

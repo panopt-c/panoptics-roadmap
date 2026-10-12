@@ -15,9 +15,16 @@
  * Esc / Enter / click skip to the end. The finish fades out and goes to the hub, passing
  * `unlocked` (the next mission id from the victory result) so the hub can stage the unlock.
  * Params: `{mission}` per the contract, plus optional `result` / `unlocked` from victory.
+ *
+ * Story scenes (prologue, act openings, epilogue; ui/story.js) use the same screen:
+ * `{mission: <GET /api/story/<id> payload>, story: id, then: {name, params}}`. Their media comes
+ * with the payload (no render request), the title card names the chapter instead of a deleted
+ * enemy, and the finish marks the scene seen before going to `then`.
+ * After the campaign's last boss transmission the finish hands over to the epilogue once.
  */
 import { h, decodeText, typewriter, nextFrame } from '../dom.js';
 import { settings } from '../../core/settings.js';
+import { markSeen, needsEpilogue, playStory } from '../story.js';
 
 const BAR_IN_MS = 900;
 const TITLE_DELAY_MS = 450;
@@ -52,6 +59,8 @@ export class CutsceneScreen {
   #finishing = false;
   #mission = null;
   #unlocked;
+  #story = null; // story scene id ('prologue' | 'intro-<t>' | 'epilogue'), null for a level transmission
+  #then = null; // where a story scene goes when it ends: {name, params}
   #timers = new Set();
   #intervals = new Set();
   #offs = [];
@@ -81,6 +90,8 @@ export class CutsceneScreen {
     this.#frameShown = -1;
     this.#eventSeq = 0;
     this.#mission = params.mission || {};
+    this.#story = typeof params.story === 'string' ? params.story : null;
+    this.#then = this.#story ? params.then || { name: 'hub', params: {} } : null;
     const result = params.result;
     this.#unlocked =
       params.unlocked !== undefined ? params.unlocked : result && !result.reward?.replay && result.next ? result.next.id : undefined;
@@ -139,12 +150,23 @@ export class CutsceneScreen {
     r.media = h('div', { class: 'cs-media', 'aria-hidden': 'true' });
     r.leak = h('div', { class: 'cs-leak', 'aria-hidden': 'true' });
     r.titleName = h('h1', { class: 'cs-title__name' }, ' ');
+    const story = this.#story;
+    const chapter = String(m.chapter || 'STORY').toUpperCase();
+    // An act opening's title already names the act ("ACT III · THE FORGE"): its card names the
+    // sector instead ("S2 · ARCHITECT //" over "THE FOUNDRY"), so nothing on it is said twice.
+    const sector = story && m.sector && Number.isInteger(m.tier) ? m.sector : null;
+    let kicker = 'TRANSMISSION //';
+    let meta = `${m.id || ''} · ${m.enemy ? `${m.enemy} DELETED` : 'MEMORY FRAGMENT'}`;
+    if (story) {
+      kicker = sector ? `S${m.tier} · ${String(sector.name || '').toUpperCase()} //` : `${chapter} //`;
+      meta = sector?.zone ? String(sector.zone).toUpperCase() : 'NULL//SECTOR';
+    }
     r.title = h(
       'div',
       { class: 'cs-title' },
-      h('div', { class: 'cs-title__kicker' }, h('span', { class: 'cs-title__rule' }), h('span', {}, 'TRANSMISSION //'), h('span', { class: 'cs-title__rule' })),
+      h('div', { class: 'cs-title__kicker' }, h('span', { class: 'cs-title__rule' }), h('span', {}, kicker), h('span', { class: 'cs-title__rule' })),
       r.titleName,
-      h('div', { class: 'cs-title__meta mono' }, `${m.id || ''} · ${m.enemy ? `${m.enemy} DELETED` : 'MEMORY FRAGMENT'}`),
+      h('div', { class: 'cs-title__meta mono' }, meta),
     );
     r.subs = h('div', { class: 'cs-subs', 'aria-live': 'polite' });
     r.status = h(
@@ -159,7 +181,7 @@ export class CutsceneScreen {
 
     this.el = h(
       'section',
-      { class: 'screen screen--cutscene', 'aria-label': `Transmission: ${cut.title}` },
+      { class: `screen screen--cutscene${story ? ' screen--story' : ''}`, 'aria-label': `${story ? chapter : 'Transmission'}: ${cut.title}` },
       r.media,
       r.leak,
       h('div', { class: 'cs-shade', 'aria-hidden': 'true' }),
@@ -168,7 +190,7 @@ export class CutsceneScreen {
       h(
         'div',
         { class: 'cs-hud cs-hud--top', 'aria-hidden': 'true' },
-        h('span', { class: 'cs-hud__rec' }, h('i'), `MEMORY FRAGMENT // ${m.id || ''}`),
+        h('span', { class: 'cs-hud__rec' }, h('i'), story ? `STORY // ${chapter}` : `MEMORY FRAGMENT // ${m.id || ''}`),
         r.timecode,
       ),
       h('div', { class: 'cs-hud cs-hud--bottom', 'aria-hidden': 'true' }, r.source, r.skip),
@@ -239,9 +261,18 @@ export class CutsceneScreen {
     this.#writer?.skip();
     this.el.classList.add('is-ending');
     this.#ctx.bus.emit('ui:close', {});
+    const story = this.#story;
+    if (story) markSeen(this.#ctx, story); // played through or skipped: either way it was shown
     this.#later(() => {
       if (!this.#alive) return;
-      this.#ctx.screens.go('hub', this.#unlocked ? { unlocked: this.#unlocked } : {});
+      const ctx = this.#ctx;
+      if (story) {
+        ctx.screens.go(this.#then.name, this.#then.params);
+        return;
+      }
+      const home = this.#unlocked ? { unlocked: this.#unlocked } : {};
+      if (needsEpilogue(ctx)) playStory(ctx, 'epilogue', { name: 'hub', params: home });
+      else ctx.screens.go('hub', home);
     }, reduced() ? 0 : FADE_OUT_MS);
   }
 
@@ -249,6 +280,12 @@ export class CutsceneScreen {
 
   async #requestMedia() {
     const id = this.#mission.id;
+    if (this.#story) {
+      // A story payload carries its render (if one exists); there is no render job to ask about.
+      const media = this.#mission.media;
+      if (media && typeof media.url === 'string' && media.url) this.#showMedia(media.url, media.kind === 'video' ? 'video' : this.#kindOf(media.url));
+      return;
+    }
     if (!id) return;
     const seq = this.#eventSeq;
     let reply;
@@ -269,7 +306,7 @@ export class CutsceneScreen {
   }
 
   #onEvent(data) {
-    if (!this.#alive || !data || data.mission !== this.#mission.id) return;
+    if (!this.#alive || this.#story || !data || data.mission !== this.#mission.id) return;
     this.#eventSeq++;
     switch (data.state) {
       case 'rendering':

@@ -30,14 +30,20 @@
  * carry a cutscene (the first level and the bosses, GAME_DESIGN §9); each one's Mission payload
  * is fetched once per app session to confirm it has a cutscene, and opens the cutscene screen.
  *
+ * Story (ui/story.js): deploying a sector's first level for the first time plays that act's
+ * opening on the way into the mission. STORY (topbar, key S) opens the story archive: the
+ * prologue, the five act openings and the epilogue, each replayable once unlocked. Hidden when
+ * the server has no story support.
+ *
  * Keys: Enter deploys the current target; O opens the command center (study & fitness);
- * arrows walk the map; Esc closes the fragment viewer (otherwise it falls through to the
- * settings menu).
+ * S opens the story archive; arrows walk the map (or the archive's list); Esc closes the
+ * fragment viewer or the archive (otherwise it falls through to the settings menu).
  */
 import { h, countUp } from '../dom.js';
 import { settings } from '../../core/settings.js';
 import { clamp, hexToRgb } from '../../core/math.js';
 import { localDay, snapshotDay, isEarlierDay } from '../api.js';
+import { pendingIntro, playStory, storyIndex, storyState } from '../story.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const UNLOCK_DELAY_MS = 1050;
@@ -61,6 +67,8 @@ const ICON_GEAR =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 2h3.4l.5 2.6 1.7.8 2.3-1.4 2.4 2.4-1.4 2.3.8 1.7 2.6.5v3.4l-2.6.5-.8 1.7 1.4 2.3-2.4 2.4-2.3-1.4-1.7.8-.5 2.6h-3.4l-.5-2.6-1.7-.8-2.3 1.4-2.4-2.4 1.4-2.3-.8-1.7L2 13.7v-3.4l2.6-.5.8-1.7-1.4-2.3 2.4-2.4 2.3 1.4 1.7-.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 const ICON_LOCK =
   '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 7h10v7H3z" fill="currentColor"/><path d="M8 9.5v2" stroke="var(--void)" stroke-width="1.6"/></svg>';
+const ICON_STORY =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h6.5a2 2 0 0 1 2 2V19a1.6 1.6 0 0 0-1.6-1.6H4z M20 5.5h-6.5a2 2 0 0 0-1.5.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M14.5 10.2v6.6l5-3.3z" fill="currentColor"/></svg>';
 const ICON_CLOSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.6"/></svg>';
 const ICON_TRANSMISSION =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6.8v10.4l8.6-5.2z" fill="currentColor"/></svg>';
@@ -106,6 +114,9 @@ export class HubScreen {
   #transmissionsLoading = new Set();
   #transmissionsFailed = new Set(); // retried on the next visit
   #opsSnap = null; // the productivity snapshot the Daily ops card shows
+  #reel = null; // the story archive overlay while it is open
+  #reelOpener = null;
+  #storyCache = new Map(); // story id → payload (titles for the archive)
 
   constructor(ctx) {
     this.#ctx = ctx;
@@ -125,6 +136,7 @@ export class HubScreen {
     this.#galleryKey = '';
     this.#tipNode = null;
     this.#lightbox = null;
+    this.#reel = null;
     this.#size = { w: 0, h: 0 };
     this.#geo = null;
     this.#transmissionsFailed.clear();
@@ -169,6 +181,7 @@ export class HubScreen {
       this.#closeLightbox();
       return true;
     }
+    if (this.#reel) return this.#reelKey(e);
     if (!this.#r.map || isMod(e)) return false;
     if (e.key === 'Enter' && !e.repeat) {
       const focused = document.activeElement;
@@ -181,6 +194,12 @@ export class HubScreen {
     if ((e.key === 'o' || e.key === 'O') && !e.repeat) {
       e.preventDefault();
       this.#openOps();
+      return true;
+    }
+    if ((e.key === 's' || e.key === 'S') && !e.repeat && this.#r.story && !this.#r.story.hidden) {
+      e.preventDefault();
+      this.#ctx.bus.emit('ui:click', {});
+      this.#openReel();
       return true;
     }
     const step = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [1, 0], ArrowDown: [-1, 0] }[e.key];
@@ -252,6 +271,20 @@ export class HubScreen {
     const r = this.#r;
     r.sectorChip = h('div', { class: 'hub-sector' });
     r.feed = h('span', { class: 'chip hub-feed' });
+    r.story = h(
+      'button',
+      {
+        class: 'btn btn--ghost hub-story',
+        type: 'button',
+        'aria-keyshortcuts': 'S',
+        'aria-haspopup': 'dialog',
+        'aria-label': 'Story archive: replay the prologue, act openings and epilogue (S)',
+        onclick: () => this.#openReel(),
+      },
+      h('span', { class: 'hub-story__icon', html: ICON_STORY }),
+      h('span', { class: 'hub-story__text' }, 'Story'),
+      h('span', { class: 'kbd' }, 'S'),
+    );
     this.#renderTopbar(state, target);
     return h(
       'header',
@@ -267,6 +300,7 @@ export class HubScreen {
       h(
         'div',
         { class: 'topbar__right' },
+        r.story,
         r.feed,
         h('button', { class: 'icon-btn icon-btn--gear', type: 'button', 'data-action': 'settings', 'aria-label': 'Settings (Esc)', title: 'Settings · Esc', html: ICON_GEAR }),
       ),
@@ -287,6 +321,7 @@ export class HubScreen {
       r.sectorChip.style.cssText = '--accent: var(--acid); --accent-rgb: 57, 255, 20';
       r.sectorChip.replaceChildren(h('span', { class: 'hub-sector__name' }, 'All sectors restored'));
     }
+    r.story.hidden = !storyState(this.#ctx);
     const hf = state.higgsfield || {};
     r.feed.className = `chip hub-feed ${hf.online ? 'chip--ok chip--live' : 'hub-feed--off'}`;
     r.feed.textContent = hf.online ? 'Higgsfield feed · live' : 'Higgsfield feed · offline';
@@ -868,7 +903,12 @@ export class HubScreen {
     level?.el.classList.add('is-launching');
     if (this.#ctx.state?.current === id) this.#r.deploy?.classList.add('is-launching');
     this.#hideTip(this.#tipNode);
-    this.#later(() => this.#ctx.screens.go('mission', { id }), LEAVE_FLASH_MS);
+    // A sector's first level, deployed for the first time, opens with that act's story scene.
+    const intro = pendingIntro(this.#ctx, id);
+    this.#later(() => {
+      if (intro) playStory(this.#ctx, intro, { name: 'mission', params: { id } });
+      else this.#ctx.screens.go('mission', { id });
+    }, LEAVE_FLASH_MS);
   }
 
   #deny(el) {
@@ -1089,6 +1129,125 @@ export class HubScreen {
     this.#opener = null;
   }
 
+  // ── story archive ───────────────────────────────────────────────────
+
+  #openReel() {
+    if (this.#reel || this.#lightbox || this.#leaving || !this.#alive || !storyState(this.#ctx)) return;
+    const list = h('ol', { class: 'story-reel__list' });
+    const close = h('button', { class: 'icon-btn story-reel__close', type: 'button', 'aria-label': 'Close (Esc)', html: ICON_CLOSE, onclick: () => this.#closeReel() });
+    const box = h(
+      'div',
+      { class: 'story-reel', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'story-reel-title', onclick: (e) => e.target === box && this.#closeReel() },
+      h(
+        'section',
+        { class: 'panel story-reel__panel' },
+        h('div', { class: 'panel__head' }, h('span', { class: 'panel__title', id: 'story-reel-title' }, 'Story archive'), h('span', { class: 'label story-reel__hint' }, 'Replay any chapter you have reached')),
+        h('div', { class: 'panel__body story-reel__body scroll' }, list),
+        close,
+      ),
+    );
+    this.#reel = { box, list };
+    this.#reelOpener = document.activeElement;
+    this.#renderReel();
+    this.el.append(box);
+    this.#ctx.bus.emit('ui:open', {});
+    requestAnimationFrame(() => box.classList.add('is-open'));
+    (list.querySelector('button:not(:disabled)') || close).focus({ preventScroll: true });
+    this.#loadReelTitles();
+  }
+
+  #renderReel() {
+    const reel = this.#reel;
+    if (!reel) return;
+    const focusedId = document.activeElement?.dataset?.story;
+    const rows = storyIndex(this.#ctx).map((entry, i) => this.#reelRow(entry, i));
+    reel.list.replaceChildren(...rows);
+    if (focusedId) reel.list.querySelector(`[data-story="${focusedId}"]`)?.focus({ preventScroll: true });
+  }
+
+  #reelRow(entry, i) {
+    const payload = this.#storyCache.get(entry.id);
+    const color = safeColor(entry.sector?.color || (entry.id === 'epilogue' ? AMBER : '#00f0ff'));
+    const zone = entry.sector?.zone || (entry.id === 'prologue' ? 'Before the Dead Zone' : entry.id === 'epilogue' ? 'Dawn' : '');
+    const title = entry.unlocked ? payload?.title || entry.chapter : 'Encrypted';
+    const lock =
+      entry.tier !== null ? `Reach ${entry.chapter} to unlock` : entry.id === 'epilogue' ? 'Restore every sector to unlock' : 'Locked';
+    const state = !entry.unlocked ? 'Locked' : entry.seen ? 'Seen' : 'New';
+    return h(
+      'li',
+      { class: 'story-reel__item', style: `--n: ${i}; --accent: ${color}; --accent-rgb: ${rgbTriplet(color)}` },
+      h(
+        'button',
+        {
+          class: `story-chapter${entry.unlocked ? '' : ' is-locked'}${entry.seen ? ' is-seen' : ''}`,
+          type: 'button',
+          'data-story': entry.id,
+          disabled: !entry.unlocked,
+          'aria-label': entry.unlocked ? `Play ${entry.chapter}: ${title}${entry.seen ? '' : ' (new)'}` : `${entry.chapter}: ${lock}`,
+          onclick: () => this.#playChapter(entry.id),
+        },
+        h('span', { class: 'story-chapter__index mono' }, entry.chapter),
+        h('span', { class: 'story-chapter__text' }, h('span', { class: 'story-chapter__title' }, title), h('span', { class: 'story-chapter__zone label' }, entry.unlocked ? zone : lock)),
+        h('span', { class: `chip story-chapter__state${entry.unlocked ? (entry.seen ? ' chip--ok' : '') : ' chip--bad'}` }, state),
+        h('span', { class: 'story-chapter__play', 'aria-hidden': 'true', html: entry.unlocked ? ICON_TRANSMISSION : ICON_LOCK }),
+      ),
+    );
+  }
+
+  /** Titles for the unlocked chapters (fetched once per app session; content never changes). */
+  #loadReelTitles() {
+    const missing = storyIndex(this.#ctx).filter((e) => e.unlocked && !this.#storyCache.has(e.id));
+    if (!missing.length) return;
+    Promise.all(
+      missing.map((e) =>
+        this.#ctx.api.story(e.id).then(
+          (payload) => payload && typeof payload === 'object' && this.#storyCache.set(e.id, payload),
+          () => null,
+        ),
+      ),
+    ).then(() => {
+      if (this.#alive && this.#reel) this.#renderReel();
+    });
+  }
+
+  #reelKey(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.#closeReel();
+      return true;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const buttons = [...this.#reel.list.querySelectorAll('button:not(:disabled)')];
+      if (!buttons.length) return true;
+      const at = buttons.indexOf(document.activeElement);
+      const next = at < 0 ? 0 : (at + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+      buttons[next].focus({ preventScroll: true });
+      return true;
+    }
+    return false; // Tab, Enter and Space keep their native behaviour inside the dialog
+  }
+
+  #closeReel({ restoreFocus = true } = {}) {
+    const reel = this.#reel;
+    if (!reel) return;
+    this.#reel = null;
+    reel.box.classList.remove('is-open');
+    this.#ctx.bus.emit('ui:close', {});
+    this.#later(() => reel.box.remove(), 260);
+    if (!this.#alive) reel.box.remove();
+    if (restoreFocus && this.#reelOpener?.isConnected) this.#reelOpener.focus({ preventScroll: true });
+    this.#reelOpener = null;
+  }
+
+  #playChapter(id) {
+    if (this.#leaving || !this.#alive) return;
+    this.#leaving = true;
+    this.#closeReel({ restoreFocus: false });
+    this.#hideTip(this.#tipNode);
+    playStory(this.#ctx, id, { name: 'hub', params: {} }, this.#storyCache.get(id));
+  }
+
   #onCutscene(e) {
     if (!e || !e.mission) return;
     if (e.state === 'rendering') this.#renders.set(e.mission, e.stage || 'still');
@@ -1110,6 +1269,7 @@ export class HubScreen {
     }
     const target = this.#byId.get(state.current);
     this.#renderTopbar(state, target);
+    if (this.#reel) this.#renderReel();
     this.#renderOperative(state, false);
     this.#renderDeploy(state);
     this.#renderBands();

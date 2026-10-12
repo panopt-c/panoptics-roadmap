@@ -314,6 +314,7 @@ _SAVE_SCHEMA = {
     "started_at": (lambda v: isinstance(v, dict), lambda k, v: isinstance(k, str) and _is_number(v)),
     "avatar_url": (lambda v: isinstance(v, str), None),
     "gallery": (lambda v: isinstance(v, list), lambda _i, v: isinstance(v, dict)),
+    "seen": (lambda v: isinstance(v, dict), lambda k, _v: isinstance(k, str)),
 }
 def parse_save(text: str) -> tuple[dict, list[str]]:
     """save.json text → (Save field values, problems found). Raises ValueError when it is not a save at all.
@@ -363,6 +364,7 @@ class Save:
     started_at: dict = field(default_factory=dict)   # mission id -> unix time first deployed
     avatar_url: str = ""                             # anchor frame for character consistency
     gallery: list = field(default_factory=list)      # generated cutscenes
+    seen: dict = field(default_factory=dict)         # what the player has been shown, e.g. {"story": ["prologue", "intro:0"]}
 
     def __post_init__(self) -> None:
         # Plain attributes, not fields: never serialized.

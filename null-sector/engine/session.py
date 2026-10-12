@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import re
 import sqlite3
 import threading
 import unicodedata
@@ -43,19 +44,21 @@ from pathlib import Path
 from urllib.parse import quote
 
 from engine import errors
-from engine.cinematics import CutsceneRenderer, entry_kind
+from engine.cinematics import MEDIA_EXTS, VIDEO_EXTS, CutsceneRenderer, entry_kind
 from engine.content import render_markdown
 from engine.mission import Cutscene, Mission
 from engine.productivity.db import SchemaTooNewError
 from engine.runner import HackReport, ensure_mission_file, hack, mission_path
 from engine.state import Paths, Save, SaveLockTimeout, atomic_write_text, load_config
 from levels import ALL_LEVELS, CAMPAIGN, LevelEntry, load_mission, next_level, sector_of
+from levels import story as story_content
 
 # Values your mission code is allowed to write into your profile.
 PROFILE_EXPORTS = {"callsign"}
 CALLSIGN_MAX = 24
 STDOUT_LIMIT = 64 * 1024          # characters of program output returned to the client
 _LEVELS = {lvl.id: lvl for lvl in ALL_LEVELS}
+_ROMAN = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X")
 
 
 class SessionError(Exception):
@@ -119,6 +122,7 @@ class GameSession:
                 } for sector in CAMPAIGN],
                 "current": current.id if current else None,
                 "higgsfield": {"online": online, "reason": reason},
+                "story": self._story_state(),
                 "gallery": [{"mission": e.get("mission", ""), "title": e.get("title", ""),
                              "url": self.media_url(e), "kind": kind}
                             for e, kind in ((e, entry_kind(e)) for e in self.save.gallery)],
@@ -215,6 +219,34 @@ class GameSession:
             mission = self._playable_mission(mission_id)
             ensure_mission_file(mission, reset=True, missions_dir=self.paths.missions_dir)
             return {"source": mission.starter.lstrip("\n")}
+
+    def story(self, event: str) -> dict:
+        """The `Story` payload for "prologue", "intro-<tier>" or "epilogue" (docs/ARCHITECTURE.md §3.3).
+
+        The same `{"id", "title", "cutscene": {"title", "narration"}}` shape the client's cutscene
+        screen plays for a level, plus `media` when a render of it exists in cutscenes/. Read-only.
+        Unknown events → SessionError(404).
+        """
+        canonical = story_event(event)
+        with self._lock:
+            self._sync()
+            return self._story_payload(canonical)
+
+    def mark_story_seen(self, event) -> dict:
+        """Record that a story cutscene was shown (idempotent). Returns {"ok", "id", "story"}."""
+        if not isinstance(event, str):
+            raise SessionError(400, 'body must be {"id": str}')
+        canonical = story_event(event)
+        with self._lock:
+            self._sync()
+            with self._saving(), self.save.transaction():   # no write when it was already seen
+                seen = dict(self.save.seen) if isinstance(self.save.seen, dict) else {}
+                raw = seen.get("story")
+                # Keep ids this version does not know (a newer game may have written them).
+                ids = [item for item in raw if isinstance(item, str)] if isinstance(raw, list) else []
+                if canonical not in ids:
+                    self.save.seen = {**seen, "story": [*ids, canonical]}
+            return {"ok": True, "id": story_api_id(canonical), "story": self._story_state()}
 
     def playable(self, mission_id: str) -> bool:
         """Cleared levels and the current (built) level are playable; nothing else."""
@@ -376,6 +408,48 @@ class GameSession:
             "cutscene": {"title": cutscene.title, "narration": list(cutscene.narration)} if cutscene else None,
         }
 
+    def _story_state(self) -> dict:
+        """`State.story`: which story cutscenes this save has been shown."""
+        ids = _story_ids(self.save.seen)
+        intros = sorted({int(e.split(":", 1)[1]) for e in ids if e.startswith("intro:")})
+        return {"prologue": "prologue" in ids, "intros": intros, "epilogue": "epilogue" in ids}
+
+    def _story_payload(self, event: str) -> dict:
+        cutscene = story_content.cutscene_for(event)
+        tier = int(event.split(":", 1)[1]) if event.startswith("intro:") else None
+        sector = next((s for s in CAMPAIGN if s.tier == tier), None) if tier is not None else None
+        if tier is None:
+            chapter = event.upper()
+        else:
+            chapter = f"ACT {_ROMAN[tier] if tier < len(_ROMAN) else tier + 1}"
+        return {
+            "id": story_api_id(event), "kind": "story", "chapter": chapter,
+            "title": cutscene.title, "tier": tier,
+            "sector": {"name": sector.name, "zone": sector.zone, "color": sector.color} if sector else None,
+            "cutscene": {"title": cutscene.title, "narration": list(cutscene.narration)},
+            "media": self._story_media(story_content.media_id(event)),
+            "seen": event in _story_ids(self.save.seen),
+        }
+
+    def _story_media(self, media_key: str) -> dict | None:
+        """A rendered still/video of a story cutscene, only when the file is really in cutscenes/."""
+        for kind in ("video", "image"):
+            for entry in reversed(self.save.gallery):
+                if entry.get("mission") == media_key and entry_kind(entry) == kind:
+                    url = self.media_url(entry)   # /cutscenes/... only while the downloaded file exists
+                    if entry.get("path") and url.startswith("/cutscenes/"):
+                        return {"url": url, "kind": kind}
+        try:   # renders dropped into cutscenes/ by another tool keep the renderer's file names
+            for stem in (f"{media_key}_cinematic", f"{media_key}_still"):
+                for ext in sorted(MEDIA_EXTS):
+                    file = self._cutscene_root / f"{stem}{ext}"
+                    if file.is_file():
+                        return {"url": "/cutscenes/" + quote(file.name),
+                                "kind": "video" if ext in VIDEO_EXTS else "image"}
+        except OSError:
+            pass
+        return None
+
     def _apply_victory(self, mission: Mission, report: HackReport) -> dict:
         save = self.save
         # One locked read-modify-write: "first clear" is decided against the save on disk, so a
@@ -383,6 +457,7 @@ class GameSession:
         with self._saving(), save.transaction():
             first_clear = mission.id not in save.cleared
             rank_before = save.rank()[0]
+            xp_before, callsign_before = save.xp, save.callsign   # the profile on disk, before this clear
             self._apply_exports(report.exports)
             if first_clear:
                 seconds = save.elapsed(mission.id)
@@ -401,6 +476,7 @@ class GameSession:
             "rank_before": rank_before, "rank_after": rank_after, "rank_up": rank_after != rank_before,
             "breach_seconds": int(seconds), "attempts": save.attempts.get(mission.id, 0),
             "callsign": save.callsign, "replay": not first_clear,
+            "xp_before": xp_before, "callsign_before": callsign_before,
         }
 
     def _apply_exports(self, exports: dict) -> None:
@@ -443,6 +519,38 @@ def _productivity_errors():
         raise SessionError(503, str(exc)) from exc
 
 
+_STORY_API_ID = re.compile(r"intro-(\d)")
+
+
+def story_event(event) -> str:
+    """API story id ("prologue", "intro-2", "epilogue"; "intro:2" also accepted) → the
+    levels/story.py event id ("intro:2"). Anything else → SessionError(404)."""
+    if isinstance(event, str):
+        match = _STORY_API_ID.fullmatch(event)
+        canonical = f"intro:{match[1]}" if match else event
+        if story_content.cutscene_for(canonical) is not None:
+            return canonical
+    raise SessionError(404, f"unknown story event '{event}'" if isinstance(event, str) and len(event) <= 64
+                       else "unknown story event")
+
+
+def story_api_id(event: str) -> str:
+    """levels/story.py event id → the id the API uses in URLs ("intro:2" → "intro-2")."""
+    return event.replace(":", "-")
+
+
+def _story_ids(seen) -> list[str]:
+    """The known story event ids in a `Save.seen` dict, in the order they were shown."""
+    raw = seen.get("story") if isinstance(seen, dict) else None
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        if isinstance(item, str) and story_content.cutscene_for(item) is not None and item not in out:
+            out.append(item)
+    return out
+
+
 def normalize_source(text: str) -> str:
     """LF newlines, and valid text only: a lone UTF-16 surrogate (half an emoji, cut by an editor)
     cannot be written as UTF-8, so it becomes U+FFFD instead of failing the save."""
@@ -478,4 +586,4 @@ def report_payload(report: HackReport) -> dict:
 
 
 __all__ = ["GameSession", "SessionError", "AttackOutcome", "PROFILE_EXPORTS", "report_payload",
-           "normalize_source", "clean_callsign"]
+           "normalize_source", "clean_callsign", "story_event", "story_api_id"]

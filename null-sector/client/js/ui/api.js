@@ -115,6 +115,18 @@ export class Api {
     return this.#request('POST', `/api/missions/${segment(id)}/cutscene`);
   }
 
+  // ── story (prologue, act openings, epilogue) ─────────────────────────────
+
+  /** GET /api/story/<id> ('prologue' | 'intro-<tier>' | 'epilogue') → a cutscene-screen payload. */
+  story(id) {
+    return this.#request('GET', `/api/story/${segment(id)}`);
+  }
+
+  /** POST /api/story/seen {id} → {ok, id, story} (idempotent). */
+  storySeen(id) {
+    return this.#request('POST', '/api/story/seen', { body: { id: String(id) } });
+  }
+
   // ── productivity command center (study, fitness, inventory) ──────────────
   // Log calls carry a caller-supplied `request_id`: resending the same id with the same
   // payload is safe (the server records it once), so callers may retry uncertain failures.

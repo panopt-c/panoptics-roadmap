@@ -106,7 +106,11 @@ def online_higgsfield(test: unittest.TestCase, client: FakeHiggsfield) -> None:
 
 
 # ── payload shapes (docs/ARCHITECTURE.md §3.3) ──────────────
-STATE_KEYS = {"profile", "campaign", "current", "higgsfield", "gallery"}
+STATE_KEYS = {"profile", "campaign", "current", "higgsfield", "story", "gallery"}
+STORY_STATE_KEYS = {"prologue", "intros", "epilogue"}
+STORY_KEYS = {"id", "kind", "chapter", "title", "tier", "sector", "cutscene", "media", "seen"}
+STORY_MEDIA_KEYS = {"url", "kind"}
+STORY_IDS = ("prologue", "intro-0", "intro-1", "intro-2", "intro-3", "intro-4", "epilogue")
 PROFILE_KEYS = {"callsign", "xp", "rank", "rank_floor", "rank_next", "breaches", "total_levels"}
 SECTOR_KEYS = {"tier", "name", "zone", "color", "levels"}
 LEVEL_KEYS = {"id", "title", "concept", "status", "boss"}
@@ -122,7 +126,7 @@ REPORT_KEYS = {"status", "checks", "stdout", "error"}
 CHECK_KEYS = {"name", "passed", "message", "hint"}
 ERROR_KEYS = {"type", "message", "line", "code", "traceback", "decoded"}
 REWARD_KEYS = {"lines", "gained", "rank_before", "rank_after", "rank_up", "breach_seconds", "attempts",
-               "callsign", "replay"}
+               "callsign", "replay", "xp_before", "callsign_before"}
 REWARD_LINE_KEYS = {"label", "amount"}
 NEXT_KEYS = {"id", "title", "concept", "status"}
 LEVEL_STATUSES = {"cleared", "current", "encrypted", "locked"}
@@ -147,6 +151,12 @@ def assert_state(tc: unittest.TestCase, state: dict) -> None:
             tc.assertIn(level["status"], LEVEL_STATUSES)
             tc.assertIsInstance(level["boss"], bool)
     tc.assertTrue(state["current"] is None or isinstance(state["current"], str))
+    story = state["story"]
+    tc.assertEqual(set(story), STORY_STATE_KEYS)
+    tc.assertIsInstance(story["prologue"], bool)
+    tc.assertIsInstance(story["epilogue"], bool)
+    tc.assertEqual(story["intros"], sorted(set(story["intros"])))
+    tc.assertTrue(all(isinstance(t, int) and 0 <= t < 5 for t in story["intros"]))
     tc.assertEqual(set(state["higgsfield"]), HIGGSFIELD_KEYS)
     tc.assertIsInstance(state["higgsfield"]["online"], bool)
     tc.assertIsInstance(state["higgsfield"]["reason"], str)
@@ -175,6 +185,29 @@ def assert_mission(tc: unittest.TestCase, mission: dict) -> None:
         tc.assertTrue(all(isinstance(line, str) for line in mission["cutscene"]["narration"]))
 
 
+def assert_story(tc: unittest.TestCase, payload: dict) -> None:
+    """GET /api/story/<event>: the cutscene screen's payload (id, title, cutscene) plus story fields."""
+    tc.assertEqual(set(payload), STORY_KEYS)
+    tc.assertIn(payload["id"], STORY_IDS)
+    tc.assertEqual(payload["kind"], "story")
+    tc.assertIsInstance(payload["chapter"], str)
+    tc.assertEqual(set(payload["cutscene"]), CUTSCENE_KEYS)
+    tc.assertEqual(payload["title"], payload["cutscene"]["title"])
+    tc.assertTrue(payload["cutscene"]["narration"])
+    tc.assertTrue(all(isinstance(line, str) for line in payload["cutscene"]["narration"]))
+    tc.assertIsInstance(payload["seen"], bool)
+    if payload["id"].startswith("intro-"):
+        tc.assertEqual(payload["tier"], int(payload["id"][-1]))
+        tc.assertEqual(set(payload["sector"]), MISSION_SECTOR_KEYS)
+    else:
+        tc.assertIsNone(payload["tier"])
+        tc.assertIsNone(payload["sector"])
+    if payload["media"] is not None:
+        tc.assertEqual(set(payload["media"]), STORY_MEDIA_KEYS)
+        tc.assertTrue(payload["media"]["url"].startswith("/cutscenes/"))
+        tc.assertIn(payload["media"]["kind"], ("image", "video"))
+
+
 def assert_hack_result(tc: unittest.TestCase, result: dict) -> None:
     tc.assertEqual(set(result), HACK_KEYS)
     report = result["report"]
@@ -197,6 +230,9 @@ def assert_hack_result(tc: unittest.TestCase, result: dict) -> None:
         for line in reward["lines"]:
             tc.assertEqual(set(line), REWARD_LINE_KEYS)
         tc.assertEqual(reward["gained"], sum(line["amount"] for line in reward["lines"]))
+        tc.assertIsInstance(reward["xp_before"], int)
+        tc.assertIsInstance(reward["callsign_before"], str)
+        tc.assertEqual(result["state"]["profile"]["xp"], reward["xp_before"] + reward["gained"])
         if result["next"] is not None:
             tc.assertEqual(set(result["next"]), NEXT_KEYS)
     else:

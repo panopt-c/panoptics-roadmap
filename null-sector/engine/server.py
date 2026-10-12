@@ -74,6 +74,7 @@ WATCH_INTERVAL = 0.3
 CLIENT_QUEUE = 256                  # SSE messages buffered per client before it counts as fallen behind
 TOKEN_PLACEHOLDER = "{{NS_TOKEN}}"
 MISSION_ID = r"(?P<mission_id>[A-Za-z0-9_-]{1,32})"
+STORY_EVENT = r"(?P<event>[A-Za-z0-9:_-]{1,32})"
 
 MIME_TYPES = {
     ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
@@ -457,6 +458,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         ("POST", re.compile(rf"/api/missions/{MISSION_ID}/hack"), "api_hack"),
         ("POST", re.compile(rf"/api/missions/{MISSION_ID}/reset"), "api_reset"),
         ("POST", re.compile(rf"/api/missions/{MISSION_ID}/cutscene"), "api_cutscene"),
+        ("GET", re.compile(rf"/api/story/{STORY_EVENT}"), "api_story"),
+        ("POST", re.compile(r"/api/story/seen"), "api_story_seen"),
     )
 
     # quiet: the terminal belongs to the game banner
@@ -589,6 +592,16 @@ class RequestHandler(BaseHTTPRequestHandler):
     def api_cutscene(self, mission_id: str) -> None:
         self._read_body()
         self._json(200, self.server.jobs.request(mission_id))
+
+    def api_story(self, event: str) -> None:
+        self._json(200, self.server.session.story(event))
+
+    def api_story_seen(self) -> None:
+        body = self._read_json()
+        event = body.get("id") if isinstance(body, dict) else None
+        if not isinstance(event, str):
+            raise HttpError(400, 'body must be {"id": str}')
+        self._json(200, self.server.session.mark_story_seen(event))
 
     def api_events(self) -> None:
         broker = self.server.broker

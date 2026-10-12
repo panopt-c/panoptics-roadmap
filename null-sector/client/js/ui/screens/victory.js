@@ -25,6 +25,7 @@
  */
 import { h, decodeText, countUp, formatTime, rectCenter, nextFrame } from '../dom.js';
 import { settings } from '../../core/settings.js';
+import { needsEpilogue, playStory } from '../story.js';
 
 const TICK_MS = 42; // reward:tick throttle
 const STAMP_IMPACT_MS = 170; // when the slam animation hits the page (see victory.css)
@@ -600,6 +601,9 @@ export class VictoryScreen {
     if (this.#leaving) return;
     this.#leaving = true;
     if (viaKey) this.#ctx.bus.emit('ui:click', {});
-    this.#ctx.screens.go('hub', this.#unlocked ? { unlocked: this.#unlocked } : {});
+    const home = this.#unlocked ? { unlocked: this.#unlocked } : {};
+    // The campaign's last victory hands over to the epilogue (once) on the way home.
+    if (needsEpilogue(this.#ctx)) playStory(this.#ctx, 'epilogue', { name: 'hub', params: home });
+    else this.#ctx.screens.go('hub', home);
   }
 }

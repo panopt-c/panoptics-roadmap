@@ -11,11 +11,13 @@
  * Any key or click at any moment jacks in: unlock audio (this is the user gesture browsers
  * require), `ui:open`, a small camera kick and cyan flash, then `go('hub')`. Modifier and
  * function keys, Tab and Esc are ignored so browser shortcuts and the settings menu still work.
+ * The very first jack-in of a save plays the prologue on the way to the hub (ui/story.js).
  *
  * Every pause goes through `#wait`, so `exit()` cancels the whole sequence in one sweep.
  */
-import { h, decodeText, typewriter } from '../dom.js';
+import { h, decodeText, typewriter, sleep } from '../dom.js';
 import { settings } from '../../core/settings.js';
+import { needsPrologue, playStory } from '../story.js';
 
 const SEEN_KEY = 'nullsector.booted';
 const LOGO = 'NULL//SECTOR';
@@ -23,6 +25,7 @@ const JACK_FLASH = [0.0, 0.94, 1.0];
 const LOG_BUDGET_MS = 1150; // lines starting later than this print instantly
 const LINE_GAP_MS = 60;
 const RESULT_DELAY_MS = 70;
+const STATE_WAIT_MS = 1500; // how long jack-in waits for a save that is still loading
 
 const IGNORED_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'ContextMenu', 'OS', 'Fn']);
 
@@ -218,7 +221,21 @@ export class BootScreen {
     ctx.camera?.addTrauma?.(0.16);
     ctx.renderer?.flash?.(JACK_FLASH, 0.28);
     this.el.classList.add('is-jacking');
-    ctx.screens.go('hub');
+    this.#enterHub();
+  }
+
+  /** To the hub — through the prologue the first time this save jacks in. */
+  async #enterHub() {
+    const ctx = this.#ctx;
+    if (!ctx.state) {
+      try {
+        await Promise.race([ctx.refreshState(), sleep(STATE_WAIT_MS)]);
+      } catch {
+        /* no save yet: the hub shows its own offline state */
+      }
+    }
+    if (needsPrologue(ctx)) playStory(ctx, 'prologue', { name: 'hub', params: {} });
+    else ctx.screens.go('hub');
   }
 
   #seen() {
