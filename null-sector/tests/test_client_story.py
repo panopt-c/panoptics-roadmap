@@ -260,6 +260,10 @@ class StoryHookTests(test_client_fixes.CampaignClientFixTests):
         self.page.keyboard.press("s")
         self.page.wait_for_selector(".story-reel", timeout=5000)
         self.page.wait_for_function("document.querySelectorAll('.story-chapter:not(:disabled)').length === 7")
+        # The archive fetches the chapter titles once; wait for them so the replay reuses that payload.
+        self.page.wait_for_function(
+            "document.querySelector('[data-story=\"epilogue\"] .story-chapter__title')?.textContent"
+            ".includes('DAWN')", timeout=15000)
         self.page.keyboard.press("ArrowUp")    # wraps to the last row: the epilogue
         self.assertEqual(self.page.evaluate("document.activeElement.dataset.story"), "epilogue")
         self.page.keyboard.press("Enter")
