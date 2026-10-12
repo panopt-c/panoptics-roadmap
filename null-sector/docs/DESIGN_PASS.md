@@ -1,6 +1,7 @@
 # NULL//SECTOR: design pass (taste skills applied)
 
-Status: audit + spec, nothing implemented yet. Written against `HEAD` 1356694 (branch
+Status: implemented (P0 793cc6f, P1 657220d, P2 in the commit that follows them); see §8 for
+what changed from the spec while executing it. Written against `HEAD` 1356694 (branch
 `claude/keen-mayer-xso05z`). Audience: the engineer who executes it.
 
 Inputs: `.agents/skills/redesign-existing-projects` (method: audit first, keep what works,
@@ -887,3 +888,32 @@ Run after each step of §5.11, from a temp copy, never the repo folder:
 10. Pre-flight (design-taste §14, game-relevant boxes): no wrapped CTA at desktop, one
     corner-cut grammar per kind (structural / alert), one focus ring, no em-dash in chrome
     strings touched, no new gradient besides the logo, reduced motion honoured.
+
+---
+
+## 8. Implementation notes (deviations found while executing)
+
+- **Mission tabs (M7)**: the narrower brief column (M1) no longer fits the full tab labels at
+  1440. The tabs switch to the short labels (COMMS / WHY / MANUAL) by *container* width
+  (`container-type: inline-size` on `.mission-brief`, threshold 336 px) instead of the old
+  1180 px media query, so they never clip at any window size.
+- **Layer names (M1)**: instead of ellipsizing the code chip ("Frame integrity - i..."), layer
+  names wrap to at most two lines (`-webkit-line-clamp: 2`), unclamped when INTEL is open. The
+  list scrolls in the tight case (INTEL open at 900 px tall). The enemy readout's "· 7 LAYERS"
+  drops by container width.
+- **Narrow grids (M6, A6)**: the single-column hub and mission use `grid-auto-rows: max-content`
+  (auto rows collapse scroll containers to their min-content size); the phone brief has a fixed
+  42 dvh height and the attempt counter, timer label and level number leave the phone topbar.
+- **DEPLOY (A5)**: boss titles would still wrap ("L15 · BOSS: THE FORGEMASTER"), so the deploy
+  title uses the short title and the kicker reads "DEPLOY ▸ // BOSS" (hub.js).
+- **Dialogue (D1)**: `dialogue.js` sets `--speaker-rgb` next to `--speaker`, so the frame, the
+  buttons and the focus ring all tint per speaker through the normal `--accent-rgb` hooks.
+- **Boot (A16)**: the scrim fades in with the reveal (on the pure-black pre-reveal veil it showed
+  as a grey disc) and the subtitle gets the cutscene subtitles' dark text shadow. Measured over
+  the beam core: 1.09:1 before, 4.1:1 against the brightest neighbouring beam pixel after.
+- **Victory skip (V3)**: `--text-2` pulsing 1 to .75 opacity (5.2:1 at the low point); `--meta`
+  pulsing would dip under AA. DELETED stamp: `--blood-ink #ff6b81` on a dark plate. Enemy
+  readout: `--blood-ink` at 85 % (blood at 85 % measured 4.1:1).
+- **Cutscene on phones (C2)**: with the 16 vh bar cap the subtitles no longer fit inside the
+  lower bar, so below 640 px they sit over the picture just above it.
+- **Not done**: M12 (compact objective checklist) is left as the open option it was written as.

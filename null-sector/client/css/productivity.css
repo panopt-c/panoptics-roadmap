@@ -4,11 +4,11 @@
 
 .screen--productivity {
   --ops-study: var(--cyan);
-  --ops-study-rgb: 0, 240, 255;
+  --ops-study-rgb: var(--cyan-rgb);
   --ops-fit: var(--magenta);
-  --ops-fit-rgb: 255, 43, 214;
+  --ops-fit-rgb: var(--magenta-rgb);
   --ops-loot: var(--amber);
-  --ops-loot-rgb: 255, 176, 0;
+  --ops-loot-rgb: var(--amber-rgb);
 }
 
 .screen--productivity [hidden] {
@@ -36,7 +36,7 @@
   letter-spacing: var(--tracking-display);
   text-transform: uppercase;
   color: var(--text);
-  text-shadow: var(--text-glow);
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.65), 0 0 22px rgba(var(--accent-rgb), 0.25);
 }
 
 .ops-topbar__date {
@@ -58,9 +58,9 @@
   clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
 }
 
-.ops-xp__chip--campaign { --accent: var(--acid); --accent-rgb: 57, 255, 20; }
-.ops-xp__chip--productivity { --accent: var(--cyan); --accent-rgb: 0, 240, 255; }
-.ops-xp__chip--total { --accent: var(--magenta); --accent-rgb: 255, 43, 214; background: rgba(255, 43, 214, 0.1); }
+.ops-xp__chip--campaign { --accent: var(--acid); --accent-rgb: var(--acid-rgb); }
+.ops-xp__chip--productivity { --accent: var(--cyan); --accent-rgb: var(--cyan-rgb); }
+.ops-xp__chip--total { --accent: var(--magenta); --accent-rgb: var(--magenta-rgb); background: rgba(var(--magenta-rgb), 0.1); }
 
 .ops-xp__label {
   font: 600 9px/1 var(--font-display);
@@ -78,7 +78,7 @@
 
 .ops-xp__op {
   font: 700 13px/1 var(--font-mono);
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .ops-xp__chip.is-bumped {
@@ -108,7 +108,7 @@
 .ops-fitness { grid-area: fitness; --accent: var(--ops-fit); --accent-rgb: var(--ops-fit-rgb); }
 .ops-log { grid-area: log; }
 .ops-armory { grid-area: armory; --accent: var(--ops-loot); --accent-rgb: var(--ops-loot-rgb); }
-.ops-feed-panel { grid-area: feed; --accent: var(--steel); --accent-rgb: 136, 146, 166; }
+.ops-feed-panel { grid-area: feed; --accent: var(--steel); --accent-rgb: var(--steel-rgb); }
 
 .ops-panel .panel__body {
   display: flex;
@@ -134,7 +134,7 @@
 .ops-empty {
   padding: 10px 0;
   font: 500 12.5px/1.5 var(--font-display);
-  color: var(--dim);
+  color: var(--meta);
   list-style: none;
 }
 
@@ -201,7 +201,7 @@
 
 .ops-ring.is-complete .ops-ring__fill {
   stroke: var(--acid);
-  filter: drop-shadow(0 0 9px rgba(57, 255, 20, 0.9));
+  filter: drop-shadow(0 0 9px rgba(var(--acid-rgb), 0.9));
 }
 
 .ops-ring__center {
@@ -218,7 +218,7 @@
   font-weight: 700;
   line-height: 1;
   color: var(--text);
-  text-shadow: var(--text-glow);
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.65), 0 0 22px rgba(var(--accent-rgb), 0.25);
 }
 
 .ops-ring__goal {
@@ -244,7 +244,7 @@
 
 .ops-stat__value.is-done {
   color: var(--acid);
-  text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+  text-shadow: 0 0 10px rgba(var(--acid-rgb), 0.5);
 }
 
 .ops-courses {
@@ -272,7 +272,7 @@
 
 .ops-course.is-idle .ops-course__name,
 .ops-course.is-idle .ops-course__min {
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .ops-course__meter {
@@ -311,7 +311,7 @@
   font-weight: 700;
   line-height: 1;
   color: var(--text);
-  text-shadow: var(--text-glow);
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.65), 0 0 22px rgba(var(--accent-rgb), 0.25);
 }
 
 .ops-unit {
@@ -409,7 +409,7 @@
   justify-content: space-between;
   padding-right: 34px;
   font-size: 9.5px;
-  color: var(--dim);
+  color: var(--meta);
 }
 
 /* ── log forms ────────────────────────────────────────────────────────── */
@@ -439,7 +439,7 @@
 }
 
 .ops-tabs .segmented__opt:focus-visible {
-  outline: 1px solid var(--text);
+  outline: var(--focus-w) solid var(--text);
   outline-offset: -3px;
 }
 
@@ -481,7 +481,7 @@
 
 .ops-field__hint {
   font: 500 10.5px/1.2 var(--font-display);
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .ops-field__error {
@@ -513,7 +513,7 @@
 }
 
 .ops-input::placeholder {
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .ops-input:hover {
@@ -527,7 +527,7 @@
 }
 
 .ops-input[aria-invalid='true'] {
-  box-shadow: inset 0 0 0 1px var(--blood), 0 0 12px rgba(255, 51, 85, 0.3);
+  box-shadow: inset 0 0 0 1px var(--blood), 0 0 12px rgba(var(--blood-rgb), 0.3);
 }
 
 .ops-input[type='number'] {
@@ -609,8 +609,8 @@
 }
 
 .ops-quick__btn:focus-visible {
-  outline: 1px solid var(--text);
-  outline-offset: 2px;
+  outline: var(--focus-w) solid rgb(var(--accent-rgb));
+  outline-offset: var(--focus-offset);
 }
 
 .ops-form__foot {
@@ -769,12 +769,12 @@
 
 .ops-milestone__mark {
   font: 700 13px/1.2 var(--font-mono);
-  color: var(--dim);
+  color: var(--muted);
 }
 
 .ops-milestone.is-done .ops-milestone__mark {
   color: var(--acid);
-  text-shadow: 0 0 8px rgba(57, 255, 20, 0.6);
+  text-shadow: 0 0 8px rgba(var(--acid-rgb), 0.6);
 }
 
 .ops-milestone__text {
@@ -793,7 +793,7 @@
 
 .ops-milestone__desc {
   font: 500 11px/1.35 var(--font-display);
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .ops-milestone__meter {
@@ -817,7 +817,7 @@
 
 .ops-habit__mark {
   font-size: 11px;
-  color: var(--dim);
+  color: var(--muted);
 }
 
 .ops-habit.is-done .ops-habit__mark {
@@ -896,7 +896,7 @@
 
 .ops-event__date {
   font-size: 10px;
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .ops-jobs-wrap {
@@ -925,7 +925,7 @@
 
 .ops-fault__panel {
   --accent: var(--blood);
-  --accent-rgb: 255, 51, 85;
+  --accent-rgb: var(--blood-rgb);
   width: min(520px, 100%);
 }
 
@@ -944,7 +944,7 @@
 /* ── hub entry (hub.js) ───────────────────────────────────────────────── */
 .hub-ops {
   --accent: var(--cyan);
-  --accent-rgb: 0, 240, 255;
+  --accent-rgb: var(--cyan-rgb);
   flex: none;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -990,7 +990,7 @@
 
 .hub-ops.is-offline {
   --accent: var(--steel);
-  --accent-rgb: 136, 146, 166;
+  --accent-rgb: var(--steel-rgb);
 }
 
 /* ── responsive ───────────────────────────────────────────────────────── */

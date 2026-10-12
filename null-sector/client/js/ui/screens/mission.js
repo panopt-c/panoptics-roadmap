@@ -229,7 +229,7 @@ export class MissionScreen {
       mission = await ctx.api.deploy(this.#id);
     } catch (err) {
       if (!this.#alive) return;
-      ctx.toast?.(`DEPLOY FAILED — ${err?.message || 'link lost'}`, { kind: 'error' });
+      ctx.toast?.(`DEPLOY FAILED // ${err?.message || 'link lost'}`, { kind: 'error' });
       ctx.bus.emit('ui:error', {});
       this.#later(() => this.#alive && ctx.screens.go('hub'), 60);
       return;
@@ -761,7 +761,7 @@ export class MissionScreen {
     } catch (err) {
       if (!this.#alive) return false;
       this.#setSync('error');
-      this.#ctx.toast?.(`SAVE FAILED — ${err?.message || 'link lost'}`, { kind: 'error' });
+      this.#ctx.toast?.(`SAVE FAILED // ${err?.message || 'link lost'}`, { kind: 'error' });
       this.#ctx.bus.emit('ui:error', {});
       return false;
     }
@@ -982,7 +982,7 @@ export class MissionScreen {
       this.#restoring = false;
       this.#restoreControls();
       this.#closeRestoreBar();
-      ctx.toast?.(`RESTORE FAILED — ${err?.message || 'link lost'}`, { kind: 'error' });
+      ctx.toast?.(`RESTORE FAILED // ${err?.message || 'link lost'}`, { kind: 'error' });
       ctx.bus.emit('ui:error', {});
       this.#log('bad', 'SYS', `Restore failed: ${err?.message || 'link lost'}. Your code was not changed.`);
       const echo = this.#restoreEcho;
@@ -1078,7 +1078,7 @@ export class MissionScreen {
 
     if (outcome.error || !outcome.result || !outcome.result.report) {
       const message = outcome.error?.message || 'malformed response';
-      ctx.toast?.(`HACK FAILED — ${message}`, { kind: 'error' });
+      ctx.toast?.(`HACK FAILED // ${message}`, { kind: 'error' });
       ctx.bus.emit('ui:error', {});
       ctx.bus.emit('mood', { name: 'mission' });
       this.#log('bad', 'LINK', `Uplink failed: ${message}`);
@@ -1214,12 +1214,14 @@ export class MissionScreen {
     const crashed = CRASH_STATUSES.has(status);
     const pool = this.#mission.dialogue?.[crashed ? 'crash' : 'fail'];
     const due = this.#attempts - this.#lineAt >= 3 && (crashed || this.#attempts >= 2);
+    // The button settles to RETRY before CIPHER speaks, so the fail line never sits over a stale
+    // "BREACHING 07/07"; #busy stays set until the line is read (the dialog is modal anyway).
+    this.#setButton('idle', { retry: true, sub: status === 'harness_error' ? 'GRADER FAULT · REINJECT' : '' });
     if (status !== 'harness_error' && pool?.length && due) {
       this.#lineAt = this.#attempts;
       await ctx.dialogue?.play(pool[this.#linesShown++ % pool.length]);
       if (!this.#alive) return;
     }
-    this.#setButton('idle', { retry: true, sub: status === 'harness_error' ? 'GRADER FAULT · REINJECT' : '' });
     this.#busy = false;
   }
 

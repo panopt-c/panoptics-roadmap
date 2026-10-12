@@ -90,7 +90,7 @@
 /* breach timer: steel → amber (75 % of par) → blood (over par) */
 .mission-timer {
   --accent: var(--steel);
-  --accent-rgb: 136, 146, 166;
+  --accent-rgb: var(--steel-rgb);
   display: grid;
   justify-items: center;
   gap: 4px;
@@ -1046,7 +1046,7 @@
 }
 
 .enemy__art::after {
-  color: rgba(255, 43, 214, 0.75);
+  color: rgba(var(--magenta-rgb), 0.75);
   animation: enemy-glitch-b 3.3s steps(1, end) infinite;
 }
 

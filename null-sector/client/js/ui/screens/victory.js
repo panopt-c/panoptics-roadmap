@@ -4,7 +4,7 @@
  * Renders the server's verdict, never computes one: every number comes from
  * `result.reward` / `result.state`. The reveal is a timed script of beats:
  *
- *   ACCESS GRANTED decodes in (chromatic glow) → "<ENEMY> — DELETED" stamp slams
+ *   ACCESS GRANTED decodes in (chromatic glow) → "<ENEMY> // DELETED" stamp slams
  *   → reward rows count up one by one (BASE XP …) → SPEED BONUS stamp slams with breach
  *   time vs par → TOTAL → XP meter fills (rolling over on a rank-up) → RANK UP banner
  *   → IDENTITY REGISTERED → stats, next target and the two actions.
@@ -154,7 +154,7 @@ export class VictoryScreen {
       'div',
       { class: 'victory__deleted stamp' },
       h('span', { class: 'victory__enemy' }, m.enemy || 'TARGET'),
-      h('span', { class: 'victory__dash' }, '—'),
+      h('span', { class: 'victory__dash' }, '//'),
       h('span', {}, 'DELETED'),
     );
 
@@ -209,7 +209,7 @@ export class VictoryScreen {
     r.totalRow = h('div', { class: 'reward reward--total' }, h('span', { class: 'reward__label' }, 'TOTAL XP'), h('span', { class: 'reward__leader' }), r.total);
 
     r.replay = reward.replay
-      ? h('div', { class: 'victory__replay' }, h('span', { class: 'stamp stamp--replay' }, 'REPLAY — NO XP'), h('p', {}, 'This sector was already restored. Your record stands.'))
+      ? h('div', { class: 'victory__replay' }, h('span', { class: 'stamp stamp--replay' }, 'REPLAY // NO XP'), h('p', {}, 'This sector was already restored. Your record stands.'))
       : null;
 
     // XP meter
@@ -370,7 +370,7 @@ export class VictoryScreen {
     await this.#decode(r.title, 'ACCESS GRANTED', 820);
     if (!this.#alive) return;
 
-    // <ENEMY> — DELETED
+    // <ENEMY> // DELETED
     await this.#beat(120);
     await this.#stamp(r.deleted);
 

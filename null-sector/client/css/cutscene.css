@@ -249,7 +249,7 @@
 .cs-title__meta {
   font-size: 11px;
   letter-spacing: 0.16em;
-  color: rgba(136, 146, 166, 0.85);
+  color: rgba(var(--steel-rgb), 0.85);
 }
 
 /* ── subtitles (centred in the lower bar) ───────────────────────────── */
@@ -321,7 +321,8 @@
   border: 1px solid rgba(var(--violet-rgb), 0.35);
   -webkit-backdrop-filter: blur(var(--blur));
   backdrop-filter: blur(var(--blur));
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  --c: var(--cut-sm);
+  clip-path: polygon(0 0, calc(100% - var(--c)) 0, 100% var(--c), 100% 100%, var(--c) 100%, 0 calc(100% - var(--c)));
   opacity: 0;
   transform: translateY(-6px);
   transition: opacity 360ms var(--ease-out), transform 360ms var(--ease-out);
@@ -362,18 +363,18 @@
 }
 
 .cs-status__stage {
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.12em;
   color: rgba(var(--magenta-rgb), 0.85);
 }
 
 .cs-status[data-state='failed'] {
-  border-color: rgba(255, 176, 0, 0.45);
+  border-color: rgba(var(--amber-rgb), 0.45);
 }
 
 .cs-status[data-state='failed'] .cs-status__ring {
   animation: none;
-  background: rgba(255, 176, 0, 0.9);
+  background: rgba(var(--amber-rgb), 0.9);
 }
 
 /* ── ending ─────────────────────────────────────────────────────────── */

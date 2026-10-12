@@ -19,12 +19,12 @@
   --ce-pad-r: 32px;
   --ce-digits: 2;
   --ce-gutter-w: calc(var(--ce-digits) * 1ch + 40px);
-  --ce-blood-rgb: 255, 51, 85;
+  --ce-blood-rgb: var(--blood-rgb);
 
   /* surfaces */
   --ce-bg: rgba(3, 5, 10, 0.72);
   --ce-gutter-bg: #060910;
-  --ce-guide: rgba(136, 146, 166, 0.09);
+  --ce-guide: rgba(var(--steel-rgb), 0.09);
   --ce-num: #5b667a; /* 3.4:1 on the gutter: readable, still quieter than code */
   --ce-num-active: #e6f4ff;
 

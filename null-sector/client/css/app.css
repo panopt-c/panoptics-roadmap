@@ -105,7 +105,7 @@ textarea,
 }
 
 ::selection {
-  background: rgba(0, 240, 255, 0.3);
+  background: rgba(var(--cyan-rgb), 0.3);
   color: #fff;
 }
 
@@ -176,7 +176,7 @@ body.no-webgl #fallback-bg {
 #crt {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-crt);
   pointer-events: none;
 }
 
@@ -184,7 +184,7 @@ body.no-webgl #fallback-bg {
   position: fixed;
   top: calc(var(--topbar-h) + 14px);
   right: var(--gutter);
-  z-index: 60;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -195,7 +195,7 @@ body.no-webgl #fallback-bg {
 #settings-root {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: var(--z-settings);
   pointer-events: none;
 }
 
@@ -218,7 +218,7 @@ body.no-webgl #fallback-bg {
 
 .glow {
   color: var(--accent);
-  text-shadow: var(--text-glow);
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.65), 0 0 22px rgba(var(--accent-rgb), 0.25);
 }
 
 .dim {
@@ -238,7 +238,7 @@ body.no-webgl #fallback-bg {
   background: linear-gradient(95deg, var(--cyan) 0%, #6fe3ff 30%, #b08cff 64%, var(--magenta) 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  filter: drop-shadow(0 0 22px rgba(0, 240, 255, 0.22));
+  filter: drop-shadow(0 0 22px rgba(var(--cyan-rgb), 0.22));
 }
 
 .ns-logo::before,
@@ -318,7 +318,7 @@ body.no-webgl #fallback-bg {
 /* Zero specificity (:where) so any component's own opacity rule on a direct child wins. */
 :where(.screen) > * {
   opacity: 0;
-  transition: opacity 260ms var(--ease-out) 40ms;
+  transition: opacity var(--t-med) var(--ease-out) 40ms;
 }
 
 :where(.screen.is-active, .screen.is-exiting, .screen--staged) > * {
@@ -348,14 +348,14 @@ body.no-webgl #fallback-bg {
 }
 
 .screen.is-active .rise {
-  animation: rise 640ms var(--ease-out) backwards;
-  animation-delay: calc(70ms + var(--i, 0) * 75ms);
+  animation: rise var(--t-scene) var(--ease-out) backwards;
+  animation-delay: calc(70ms + var(--i, 0) * var(--stagger));
 }
 
 /* Same idea for one-shot reactions on staged elements: the entrance stays listed. */
 .screen.is-active .rise.is-denied {
-  animation: rise 640ms var(--ease-out) backwards, deny-shake 380ms var(--ease-out);
-  animation-delay: calc(70ms + var(--i, 0) * 75ms), 0s;
+  animation: rise var(--t-scene) var(--ease-out) backwards, deny-shake 380ms var(--ease-out);
+  animation-delay: calc(70ms + var(--i, 0) * var(--stagger)), 0s;
 }
 
 @keyframes rise {
@@ -375,8 +375,8 @@ body.no-webgl #fallback-bg {
   right: 0;
   z-index: 40;
   height: 2px;
-  background: linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.85) 50%, transparent 100%);
-  box-shadow: 0 0 18px 2px rgba(0, 240, 255, 0.3);
+  background: linear-gradient(90deg, transparent 0%, rgba(var(--cyan-rgb), 0.85) 50%, transparent 100%);
+  box-shadow: 0 0 18px 2px rgba(var(--cyan-rgb), 0.3);
   opacity: 0;
   pointer-events: none;
 }
@@ -606,7 +606,7 @@ body.no-webgl #fallback-bg {
 
 .btn--danger {
   --accent: var(--blood);
-  --accent-rgb: 255, 51, 85;
+  --accent-rgb: var(--blood-rgb);
 }
 
 .btn--ghost {
@@ -710,7 +710,7 @@ body.no-webgl #fallback-bg {
   text-transform: uppercase;
   color: var(--steel);
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(136, 146, 166, 0.38);
+  border: 1px solid rgba(var(--steel-rgb), 0.38);
   border-bottom-width: 2px;
   border-radius: 3px;
 }
@@ -735,17 +735,17 @@ body.no-webgl #fallback-bg {
 
 .chip--ok {
   --accent: var(--acid);
-  --accent-rgb: 57, 255, 20;
+  --accent-rgb: var(--acid-rgb);
 }
 
 .chip--warn {
   --accent: var(--amber);
-  --accent-rgb: 255, 176, 0;
+  --accent-rgb: var(--amber-rgb);
 }
 
 .chip--bad {
   --accent: var(--blood);
-  --accent-rgb: 255, 51, 85;
+  --accent-rgb: var(--blood-rgb);
 }
 
 .chip--live::before {
@@ -897,7 +897,7 @@ body.no-webgl #fallback-bg {
 .rich a {
   color: var(--cyan);
   text-decoration: underline;
-  text-decoration-color: rgba(0, 240, 255, 0.35);
+  text-decoration-color: rgba(var(--cyan-rgb), 0.35);
   text-underline-offset: 3px;
 }
 
@@ -945,7 +945,7 @@ body.no-webgl #fallback-bg {
 .rich blockquote {
   padding: 0.6em 1em;
   border-left: 2px solid var(--magenta);
-  background: linear-gradient(90deg, rgba(255, 43, 214, 0.08), transparent);
+  background: linear-gradient(90deg, rgba(var(--magenta-rgb), 0.08), transparent);
   color: #e3c7ec;
 }
 
@@ -959,8 +959,8 @@ body.no-webgl #fallback-bg {
   padding: 0.1em 0.38em;
   font: 500 0.88em/1 var(--font-mono);
   color: var(--cyan);
-  background: rgba(0, 240, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.16);
+  background: rgba(var(--cyan-rgb), 0.08);
+  box-shadow: inset 0 0 0 1px rgba(var(--cyan-rgb), 0.16);
   border-radius: 2px;
   white-space: break-spaces;
 }
@@ -1014,7 +1014,7 @@ body.no-webgl #fallback-bg {
 .tk-o { color: #7ce8f5; }
 .tk-p { color: #8892a6; }
 .tk-c, .tk-c1, .tk-cm, .tk-ch, .tk-cs, .tk-cp, .tk-cpf { color: #5d6780; font-style: italic; }
-.tk-err { color: var(--blood); text-decoration: underline wavy rgba(255, 51, 85, 0.7); }
+.tk-err { color: var(--blood); text-decoration: underline wavy rgba(var(--blood-rgb), 0.7); }
 .tk-gh, .tk-gu { color: var(--cyan); font-weight: 700; }
 .tk-gd { color: var(--blood); }
 .tk-gi { color: var(--acid); }
@@ -1128,12 +1128,12 @@ body.no-webgl #fallback-bg {
 /* ── link banner (SSE dropped / session expired) ──────────────────────── */
 .link-banner {
   --accent: var(--amber);
-  --accent-rgb: 255, 176, 0;
+  --accent-rgb: var(--amber-rgb);
   --c: 10px;
   position: fixed;
   top: 10px;
   left: 50%;
-  z-index: 65;
+  z-index: var(--z-banner);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1169,7 +1169,7 @@ body.no-webgl #fallback-bg {
 
 .link-banner.is-fatal {
   --accent: var(--blood);
-  --accent-rgb: 255, 51, 85;
+  --accent-rgb: var(--blood-rgb);
 }
 
 .link-banner__pulse {
@@ -1237,8 +1237,8 @@ body.no-webgl #fallback-bg {
   --fb-far: #0c1426;
   --fb-near: #05080f;
   background:
-    radial-gradient(64% 40% at 50% 61%, rgba(0, 240, 255, 0.2), rgba(0, 240, 255, 0) 70%),
-    radial-gradient(26% 18% at 50% 60%, rgba(255, 43, 214, 0.12), rgba(255, 43, 214, 0) 70%),
+    radial-gradient(64% 40% at 50% 61%, rgba(var(--cyan-rgb), 0.2), rgba(var(--cyan-rgb), 0) 70%),
+    radial-gradient(26% 18% at 50% 60%, rgba(var(--magenta-rgb), 0.12), rgba(var(--magenta-rgb), 0) 70%),
     radial-gradient(90% 60% at 50% -10%, rgba(80, 60, 160, 0.16), rgba(80, 60, 160, 0) 70%),
     linear-gradient(180deg, #02030a 0%, #060a16 40%, #0c1426 61.5%, #04060c 62%, #05070d 100%);
 }
@@ -1254,8 +1254,8 @@ body.no-webgl #fallback-bg {
   width: 18px;
   height: 34vh;
   margin-left: -9px;
-  background: linear-gradient(180deg, rgba(0, 240, 255, 0) 0%, rgba(0, 240, 255, 0.3) 35%, rgba(190, 252, 255, 0.95) 100%);
-  box-shadow: 0 0 46px 6px rgba(0, 240, 255, 0.35);
+  background: linear-gradient(180deg, rgba(var(--cyan-rgb), 0) 0%, rgba(var(--cyan-rgb), 0.3) 35%, rgba(190, 252, 255, 0.95) 100%);
+  box-shadow: 0 0 46px 6px rgba(var(--cyan-rgb), 0.35);
   animation: fb-pulse 7s var(--ease-in-out) infinite;
 }
 
@@ -1267,7 +1267,7 @@ body.no-webgl #fallback-bg {
   width: 2px;
   height: 40vh;
   margin-left: -1px;
-  background: linear-gradient(0deg, rgba(0, 240, 255, 0.6), rgba(0, 240, 255, 0));
+  background: linear-gradient(0deg, rgba(var(--cyan-rgb), 0.6), rgba(var(--cyan-rgb), 0));
 }
 
 .fb-far,
@@ -1318,8 +1318,8 @@ body.no-webgl #fallback-bg {
 .fb-near::after {
   background:
     radial-gradient(circle, rgba(255, 186, 90, 0.8) 0 1px, transparent 1.6px) 3px 5px / 31px 19px,
-    radial-gradient(circle, rgba(0, 240, 255, 0.75) 0 1px, transparent 1.6px) 11px 2px / 53px 23px,
-    radial-gradient(circle, rgba(255, 43, 214, 0.6) 0 1px, transparent 1.6px) 27px 13px / 71px 29px;
+    radial-gradient(circle, rgba(var(--cyan-rgb), 0.75) 0 1px, transparent 1.6px) 11px 2px / 53px 23px,
+    radial-gradient(circle, rgba(var(--magenta-rgb), 0.6) 0 1px, transparent 1.6px) 27px 13px / 71px 29px;
   opacity: 0.55;
   animation: fb-windows 9s steps(3, end) infinite;
 }
@@ -1331,8 +1331,8 @@ body.no-webgl #fallback-bg {
   bottom: 0;
   overflow: hidden;
   background:
-    linear-gradient(90deg, transparent 47%, rgba(0, 240, 255, 0.16) 49.5%, rgba(0, 240, 255, 0.16) 50.5%, transparent 53%),
-    linear-gradient(180deg, rgba(0, 240, 255, 0.1), transparent 45%);
+    linear-gradient(90deg, transparent 47%, rgba(var(--cyan-rgb), 0.16) 49.5%, rgba(var(--cyan-rgb), 0.16) 50.5%, transparent 53%),
+    linear-gradient(180deg, rgba(var(--cyan-rgb), 0.1), transparent 45%);
 }
 
 .fb-water::before {
@@ -1483,13 +1483,13 @@ body.no-webgl #fallback-bg {
 }
 
 .boot__line--head .boot__caret {
-  color: rgba(0, 240, 255, 0.55);
+  color: rgba(var(--cyan-rgb), 0.55);
 }
 
 .boot__leader {
   align-self: center;
   height: 2px;
-  background: radial-gradient(circle, rgba(136, 146, 166, 0.55) 0 0.9px, transparent 1.3px) 0 50% / 6px 2px repeat-x;
+  background: radial-gradient(circle, rgba(var(--steel-rgb), 0.55) 0 0.9px, transparent 1.3px) 0 50% / 6px 2px repeat-x;
   transform: scaleX(0);
   transform-origin: 0 50%;
   transition: transform 180ms var(--ease-out);
@@ -1528,7 +1528,7 @@ body.no-webgl #fallback-bg {
 
 .boot__result[data-kind='bad'] {
   color: var(--blood);
-  text-shadow: 0 0 12px rgba(255, 51, 85, 0.7);
+  text-shadow: 0 0 12px rgba(var(--blood-rgb), 0.7);
 }
 
 .boot__line--bad.is-done .boot__result {
@@ -1560,7 +1560,7 @@ body.no-webgl #fallback-bg {
   position: absolute;
   inset: -6vh -8vw;
   z-index: -1;
-  background: radial-gradient(closest-side, rgba(3, 4, 8, 0.72), rgba(3, 4, 8, 0));
+  background: radial-gradient(closest-side, rgba(3, 4, 8, 0.8), rgba(3, 4, 8, 0));
   pointer-events: none;
   opacity: 0;
   transition: opacity 1000ms var(--ease-in-out);
@@ -1595,6 +1595,7 @@ body.no-webgl #fallback-bg {
   letter-spacing: var(--tracking-kicker);
   text-transform: uppercase;
   color: var(--text-2);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 12px rgba(3, 4, 8, 0.9); /* as the cutscene subtitles: legible on any frame */
   opacity: 0;
   translate: 0 8px;
   transition:
@@ -1624,7 +1625,7 @@ body.no-webgl #fallback-bg {
   letter-spacing: 0.42em;
   text-transform: uppercase;
   color: var(--cyan);
-  text-shadow: 0 0 12px rgba(0, 240, 255, 0.55);
+  text-shadow: 0 0 12px rgba(var(--cyan-rgb), 0.55);
   opacity: 0;
   transition: opacity 400ms var(--ease-out);
 }
@@ -1634,7 +1635,7 @@ body.no-webgl #fallback-bg {
   content: '';
   width: 56px;
   height: 1px;
-  background: linear-gradient(90deg, rgba(0, 240, 255, 0), rgba(0, 240, 255, 0.8));
+  background: linear-gradient(90deg, rgba(var(--cyan-rgb), 0), rgba(var(--cyan-rgb), 0.8));
 }
 
 .boot__prompt::after {
@@ -1706,7 +1707,7 @@ body.no-webgl #fallback-bg {
 .hub__left {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--gutter);
   grid-area: left;
   min-height: 0;
 }
@@ -1784,7 +1785,7 @@ body.no-webgl #fallback-bg {
 
 .hub-feed--off {
   --accent: var(--steel);
-  --accent-rgb: 136, 146, 166;
+  --accent-rgb: var(--steel-rgb);
   opacity: 0.85;
 }
 
@@ -1801,7 +1802,7 @@ body.no-webgl #fallback-bg {
 .operative__body {
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: var(--sp-3);
 }
 
 .operative__portrait {
@@ -1809,11 +1810,11 @@ body.no-webgl #fallback-bg {
   position: relative;
   flex: 1 1 110px;
   min-height: 84px;
-  max-height: 200px;
+  max-height: 160px;
   overflow: hidden;
   color: var(--cyan);
   background:
-    radial-gradient(80% 90% at 50% 20%, rgba(0, 240, 255, 0.1), rgba(0, 240, 255, 0) 70%),
+    radial-gradient(80% 90% at 50% 20%, rgba(var(--cyan-rgb), 0.1), rgba(var(--cyan-rgb), 0) 70%),
     rgba(2, 4, 8, 0.55);
   clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
 }
@@ -1847,7 +1848,7 @@ body.no-webgl #fallback-bg {
   background:
     repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, 0.28) 2px 3px),
     linear-gradient(180deg, rgba(5, 6, 10, 0) 55%, rgba(5, 6, 10, 0.75));
-  box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(var(--cyan-rgb), 0.18);
 }
 
 .operative__scan {
@@ -1858,7 +1859,7 @@ body.no-webgl #fallback-bg {
   z-index: 1;
   height: 34%;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0, 240, 255, 0), rgba(0, 240, 255, 0.13) 85%, rgba(0, 240, 255, 0.4) 100%);
+  background: linear-gradient(180deg, rgba(var(--cyan-rgb), 0), rgba(var(--cyan-rgb), 0.13) 85%, rgba(var(--cyan-rgb), 0.4) 100%);
   animation: portrait-scan 9s var(--ease-in-out) 3; /* scan on arrival, then rest */
 }
 
@@ -1873,7 +1874,7 @@ body.no-webgl #fallback-bg {
   bottom: 9px;
   z-index: 2;
   font-size: var(--fs-micro);
-  color: rgba(0, 240, 255, 0.85);
+  color: rgba(var(--cyan-rgb), 0.85);
 }
 
 .operative__ident {
@@ -1898,7 +1899,7 @@ body.no-webgl #fallback-bg {
   font-size: 20px;
   letter-spacing: 0.16em;
   color: var(--blood);
-  text-shadow: 0 0 10px rgba(255, 51, 85, 0.5);
+  text-shadow: 0 0 10px rgba(var(--blood-rgb), 0.5);
 }
 
 .operative__callsign.is-unregistered::before,
@@ -1938,7 +1939,7 @@ body.no-webgl #fallback-bg {
 
 .operative__xp {
   display: grid;
-  gap: 7px;
+  gap: var(--sp-2);
 }
 
 .operative__xp-nums {
@@ -1960,7 +1961,7 @@ body.no-webgl #fallback-bg {
 
 .operative__meter.is-max {
   --accent: var(--acid);
-  --accent-rgb: 57, 255, 20;
+  --accent-rgb: var(--acid-rgb);
 }
 
 .operative__xp-note {
@@ -2082,9 +2083,9 @@ body.no-webgl #fallback-bg {
 
 .deploy.is-encrypted {
   --accent: var(--amber);
-  --accent-rgb: 255, 176, 0;
-  --btn-fill: rgba(255, 176, 0, 0.07);
-  --btn-line: rgba(255, 176, 0, 0.55);
+  --accent-rgb: var(--amber-rgb);
+  --btn-fill: rgba(var(--amber-rgb), 0.07);
+  --btn-line: rgba(var(--amber-rgb), 0.55);
 }
 
 .deploy.is-encrypted .deploy__kicker {
@@ -2104,7 +2105,7 @@ body.no-webgl #fallback-bg {
 
 .deploy.is-complete {
   --accent: var(--acid);
-  --accent-rgb: 57, 255, 20;
+  --accent-rgb: var(--acid-rgb);
 }
 
 .deploy.is-fresh::before {
@@ -2141,7 +2142,7 @@ body.no-webgl #fallback-bg {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: radial-gradient(circle, rgba(0, 240, 255, 0.1) 0 1px, transparent 1.4px) 0 0 / 22px 22px;
+  background: radial-gradient(circle, rgba(var(--cyan-rgb), 0.1) 0 1px, transparent 1.4px) 0 0 / 22px 22px;
 }
 
 .map__bands,
@@ -2272,7 +2273,7 @@ body.no-webgl #fallback-bg {
 }
 
 .trace--locked {
-  stroke: rgba(136, 146, 166, 0.3);
+  stroke: rgba(var(--steel-rgb), 0.3);
   stroke-width: 1.5;
   stroke-dasharray: 2 6;
 }
@@ -2529,7 +2530,7 @@ body.no-webgl #fallback-bg {
 }
 
 .map-node.is-current .map-node__ring {
-  animation: node-pulse 1.9s var(--ease-out) infinite;
+  animation: node-pulse var(--loop-pulse) var(--ease-out) infinite;
 }
 
 .map-node.is-current .map-node__title {
@@ -2562,13 +2563,13 @@ body.no-webgl #fallback-bg {
 /* status: encrypted */
 .map-node.is-encrypted {
   --c: var(--amber);
-  --c-rgb: 255, 176, 0;
-  --frame: rgba(255, 176, 0, 0.75);
-  --core: repeating-linear-gradient(135deg, rgba(255, 176, 0, 0.16) 0 3px, rgba(255, 176, 0, 0) 3px 7px), rgba(12, 10, 4, 0.96);
+  --c-rgb: var(--amber-rgb);
+  --frame: rgba(var(--amber-rgb), 0.75);
+  --core: repeating-linear-gradient(135deg, rgba(var(--amber-rgb), 0.16) 0 3px, rgba(var(--amber-rgb), 0) 3px 7px), rgba(12, 10, 4, 0.96);
 }
 
 .map-node.is-encrypted .map-node__hex {
-  filter: drop-shadow(0 0 7px rgba(255, 176, 0, 0.55));
+  filter: drop-shadow(0 0 7px rgba(var(--amber-rgb), 0.55));
 }
 
 .map-node.is-encrypted .map-node__glyph {
@@ -2578,7 +2579,7 @@ body.no-webgl #fallback-bg {
 
 .map-node.is-encrypted .map-node__title,
 .map-node.is-encrypted .map-node__tag {
-  color: rgba(255, 176, 0, 0.85);
+  color: rgba(var(--amber-rgb), 0.85);
 }
 
 .map-node.is-encrypted .map-node__ring {
@@ -2891,7 +2892,7 @@ body.no-webgl #fallback-bg {
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 43, 214, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(var(--magenta-rgb), 0.28);
   transition: box-shadow var(--t-med) var(--ease-out);
 }
 
@@ -2917,7 +2918,7 @@ body.no-webgl #fallback-bg {
   display: block;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(255, 43, 214, 0.1), rgba(0, 240, 255, 0.06));
+  background: linear-gradient(135deg, rgba(var(--magenta-rgb), 0.1), rgba(var(--cyan-rgb), 0.06));
 }
 
 .frag__media img,
@@ -3013,7 +3014,7 @@ body.no-webgl #fallback-bg {
 .frag__shimmer {
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, rgba(255, 43, 214, 0) 30%, rgba(255, 43, 214, 0.2) 50%, rgba(255, 43, 214, 0) 70%);
+  background: linear-gradient(100deg, rgba(var(--magenta-rgb), 0) 30%, rgba(var(--magenta-rgb), 0.2) 50%, rgba(var(--magenta-rgb), 0) 70%);
   animation: shimmer 1.6s var(--ease-in-out) infinite;
 }
 
@@ -3031,7 +3032,7 @@ body.no-webgl #fallback-bg {
   place-items: center;
   background:
     radial-gradient(ellipse at 50% 55%, rgba(var(--c-rgb, 0, 240, 255), 0.22), rgba(5, 6, 10, 0) 70%),
-    linear-gradient(135deg, rgba(255, 43, 214, 0.08), rgba(0, 240, 255, 0.06));
+    linear-gradient(135deg, rgba(var(--magenta-rgb), 0.08), rgba(var(--cyan-rgb), 0.06));
 }
 
 .frag__signal-grid {
@@ -3051,11 +3052,10 @@ body.no-webgl #fallback-bg {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid rgba(var(--c-rgb, 0, 240, 255), 0.6);
-  border-radius: 50%;
-  color: rgb(var(--c-rgb, 0, 240, 255));
+  color: rgb(var(--c-rgb, var(--cyan-rgb)));
   background: rgba(5, 6, 10, 0.55);
-  box-shadow: 0 0 18px rgba(var(--c-rgb, 0, 240, 255), 0.3);
+  box-shadow: inset 0 0 0 1px rgba(var(--c-rgb, var(--cyan-rgb)), 0.6);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
   transition:
     transform var(--t-med) var(--ease-out),
     box-shadow var(--t-med) var(--ease-out);
@@ -3069,11 +3069,17 @@ body.no-webgl #fallback-bg {
 .frag--transmission:hover .frag__play,
 .frag--transmission:focus-visible .frag__play {
   transform: scale(1.08);
-  box-shadow: 0 0 26px rgba(var(--c-rgb, 0, 240, 255), 0.55);
+  background: rgba(var(--c-rgb, var(--cyan-rgb)), 0.16);
+  box-shadow: inset 0 0 0 1px rgb(var(--c-rgb, var(--cyan-rgb)));
 }
 
 .frag__kind.is-engine {
   color: var(--cyan);
+}
+
+/* When every card is in-engine the label carries no information: drop it. */
+.hub-gallery__list:not(:has(.frag__kind:not(.is-engine))) .frag__kind.is-engine {
+  display: none;
 }
 
 .hub-gallery__note {
@@ -3104,8 +3110,8 @@ body.no-webgl #fallback-bg {
 .hub-gallery__empty-icon svg {
   width: 52px;
   height: 52px;
-  color: rgba(255, 43, 214, 0.55);
-  filter: drop-shadow(0 0 10px rgba(255, 43, 214, 0.35));
+  color: rgba(var(--magenta-rgb), 0.55);
+  filter: drop-shadow(0 0 10px rgba(var(--magenta-rgb), 0.35));
 }
 
 .hub-gallery__empty-title {
@@ -3135,7 +3141,7 @@ body.no-webgl #fallback-bg {
 .lightbox {
   position: absolute;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-overlay);
   display: grid;
   place-items: center;
   padding: 8vh 6vw;
@@ -3157,8 +3163,8 @@ body.no-webgl #fallback-bg {
   gap: 10px;
   max-width: min(1040px, 100%);
   padding: 10px 10px 12px;
-  background: linear-gradient(180deg, rgba(255, 43, 214, 0.1), rgba(5, 6, 10, 0.9) 120px), rgba(5, 6, 10, 0.9);
-  box-shadow: inset 0 0 0 1px rgba(255, 43, 214, 0.45);
+  background: linear-gradient(180deg, rgba(var(--magenta-rgb), 0.1), rgba(5, 6, 10, 0.9) 120px), rgba(5, 6, 10, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(var(--magenta-rgb), 0.45);
   clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
   scale: 0.96;
   transition: scale var(--t-slow) var(--ease-out);
@@ -3195,7 +3201,7 @@ body.no-webgl #fallback-bg {
 
 .lightbox__close {
   --accent: var(--magenta);
-  --accent-rgb: 255, 43, 214;
+  --accent-rgb: var(--magenta-rgb);
   --btn-fill: rgba(5, 6, 10, 0.75);
   position: absolute;
   top: 18px;
@@ -3231,8 +3237,8 @@ body.no-webgl #fallback-bg {
   opacity: 0;
   transform: translate3d(0, 18px, 0) scale(0.97);
   transition:
-    opacity 220ms var(--ease-out),
-    transform 460ms var(--ease-out);
+    opacity var(--t-med) var(--ease-out),
+    transform var(--t-slow) var(--ease-out);
 }
 
 .settings.is-open .settings__panel {
@@ -3417,8 +3423,8 @@ body.no-webgl #fallback-bg {
   position: relative;
   width: 46px;
   height: 22px;
-  background: rgba(136, 146, 166, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(136, 146, 166, 0.35);
+  background: rgba(var(--steel-rgb), 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--steel-rgb), 0.35);
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
   transition:
     background-color var(--t-med) var(--ease-out),

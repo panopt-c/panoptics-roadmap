@@ -463,7 +463,7 @@ export class HubScreen {
       .catch(() => {
         if (!this.#alive || ctx.productivity || !this.#r.ops) return;
         this.#r.ops.classList.add('is-offline');
-        this.#r.opsSub.textContent = 'Offline — open to retry';
+        this.#r.opsSub.textContent = 'Offline. Open to retry';
       });
   }
 
@@ -989,13 +989,13 @@ export class HubScreen {
           h('span', { class: 'hub-gallery__empty-icon', html: ICON_FRAGMENT }),
           h('p', { class: 'hub-gallery__empty-title' }, title),
           h('p', { class: 'hub-gallery__empty-text' }, text),
-          online ? null : h('p', { class: 'hub-gallery__empty-note' }, 'Feed offline — add a Higgsfield key to config.json to render transmissions as fragments.'),
+          online ? null : h('p', { class: 'hub-gallery__empty-note' }, 'Feed offline. Add a Higgsfield key to config.json to render transmissions as fragments.'),
         ),
       );
       return;
     }
     if (transmissions.length && !online) {
-      cards.push(h('p', { class: 'hub-gallery__note' }, 'Feed offline — transmissions replay in-engine. Add a Higgsfield key to config.json to keep rendered fragments.'));
+      cards.push(h('p', { class: 'hub-gallery__note' }, 'Feed offline: transmissions replay in-engine. Add a Higgsfield key to config.json to keep rendered fragments.'));
     }
     r.galleryList.replaceChildren(...cards);
   }

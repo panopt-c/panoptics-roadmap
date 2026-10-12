@@ -509,7 +509,7 @@
 }
 
 .victory__cast {
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   color: inherit;
   opacity: 0.72;
@@ -608,6 +608,25 @@
 
   .victory__actions .btn {
     width: 100%;
+  }
+
+  .victory__stats {
+    gap: 6px 18px;
+  }
+
+  .victory__stat .label {
+    font-size: var(--fs-micro);
+  }
+
+  /* reward rows: the detail (time / par) drops under its label instead of breaking both */
+  .reward__label {
+    flex-wrap: wrap;
+    gap: 2px 14px;
+  }
+
+  .reward__detail {
+    flex-basis: 100%;
+    white-space: nowrap;
   }
 }
 
