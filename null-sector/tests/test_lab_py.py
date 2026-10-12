@@ -115,6 +115,7 @@ class LabPYMixin:
     def test_learner_mistakes_fail_on_the_right_layer(self):
         self.assertGreaterEqual(len(self.mistakes), 2)
         for label, source, layer, teaches in self.mistakes:
+            teaches = (teaches,) if isinstance(teaches, str) else tuple(teaches)
             with self.subTest(mistake=label):
                 self.assert_fails_on(grade(self.slug, source), layer, *teaches)
 
@@ -212,6 +213,226 @@ class PY01CensusTests(LabPYMixin, unittest.TestCase):
          "Skill registry", "second for clause"),
         ("forgot the call parentheses",
          mutate(PY01_SOLUTION, '.strip().lower()', '.strip().lower'), "Purge", "()"),
+    )
+
+
+# ── PY02 TALLY MARKS ────────────────────────────────────────────────────────────
+
+PY02_SOLUTION = r'''
+from collections import Counter, defaultdict
+
+
+def word_counts(text):
+    return Counter(text.lower().split())
+
+
+def class_balance(labels):
+    total = len(labels)
+    return {label: n / total for label, n in Counter(labels).items()}
+
+
+def group_names(records, key):
+    groups = defaultdict(list)
+    for r in records:
+        groups[r[key]].append(r["name"])
+    return groups
+
+
+def build_vocab(texts, min_count=2):
+    counts = Counter()
+    for t in texts:
+        counts.update(t.lower().split())
+    vocab = {"<unk>": 0}
+    for word, n in counts.most_common():
+        if n >= min_count:
+            vocab[word] = len(vocab)
+    return vocab
+
+
+def encode(text, vocab):
+    return [vocab.get(w, 0) for w in text.lower().split()]
+
+
+def merge_tallies(a, b):
+    total = Counter(a)
+    total.update(b)
+    return total
+'''
+
+
+@unittest.skipUnless(_importable("PY02"), "PY02 not built or requirements missing")
+class PY02TallyMarksTests(LabPYMixin, unittest.TestCase):
+    entry_id = "PY02"
+    solution = PY02_SOLUTION
+    mistakes = (
+        ("split(' ') counts empty strings",
+         mutate(PY02_SOLUTION, "return Counter(text.lower().split())", "return Counter(text.lower().split(' '))"),
+         "Tally", "split()"),
+        ("plain dict instead of a Counter",
+         mutate(PY02_SOLUTION, "return Counter(text.lower().split())",
+                "out = {}\n    for w in text.lower().split():\n        out[w] = out.get(w, 0) + 1\n    return out"),
+         "Tally", "Counter"),
+        ("raw counts instead of shares",
+         mutate(PY02_SOLUTION, "{label: n / total for", "{label: n for"), "Balance", "Divide"),
+        ("overwrites instead of grouping",
+         mutate(PY02_SOLUTION, 'groups[r[key]].append(r["name"])', 'groups[r[key]] = r["name"]'),
+         "Muster", "append"),
+        ("strict > min_count drops the edge",
+         mutate(PY02_SOLUTION, "if n >= min_count:", "if n > min_count:"), "Lexicon", ">="),
+        ("vocab[w] crashes on unknown words",
+         mutate(PY02_SOLUTION, "[vocab.get(w, 0) for w", "[vocab[w] for w"), "Encoding", ".get(key, default)"),
+        ("Counter.update on a, in place",
+         mutate(PY02_SOLUTION, "total = Counter(a)\n    total.update(b)", "total = a\n    total.update(b)"),
+         "Purge the worm", "NEW Counter"),
+    )
+
+
+# ── PY03 ORDER OF RANKS ─────────────────────────────────────────────────────────
+
+PY03_SOLUTION = r"""
+def leaderboard(scores):
+    return [name for name, _ in sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def rank_records(records):
+    return sorted(records, key=lambda r: (r["sector"], -r["age"], r["name"]))
+
+
+def argsort(values):
+    return sorted(range(len(values)), key=lambda i: values[i])
+
+
+def paired(features, labels):
+    return list(zip(features, labels, strict=True))
+
+
+def ranked(scores):
+    return [(rank, name, scores[name]) for rank, name in enumerate(leaderboard(scores), start=1)]
+
+
+def columns(rows):
+    return [list(col) for col in zip(*rows)]
+
+
+def youngest_first(records):
+    return sorted(records, key=lambda r: r["age"])
+"""
+
+
+@unittest.skipUnless(_importable("PY03"), "PY03 not built or requirements missing")
+class PY03OrderOfRanksTests(LabPYMixin, unittest.TestCase):
+    entry_id = "PY03"
+    solution = PY03_SOLUTION
+    mistakes = (
+        ("reverse=True flips the name tiebreak too",
+         mutate(PY03_SOLUTION, "key=lambda kv: (-kv[1], kv[0]))]", "key=lambda kv: (kv[1], kv[0]), reverse=True)]"),
+         "Leaderboard", "reverse=True"),
+        ("youngest first inside a sector",
+         mutate(PY03_SOLUTION, '(r["sector"], -r["age"], r["name"])', '(r["sector"], r["age"], r["name"])'),
+         "Chain of command", "OLDEST"),
+        ("in-place sort mutates the caller's list",
+         mutate(PY03_SOLUTION, 'return sorted(records, key=lambda r: (r["sector"], -r["age"], r["name"]))',
+                'records.sort(key=lambda r: (r["sector"], -r["age"], r["name"]))\n    return records'),
+         "Chain of command", "NEW list"),
+        ("returns sorted values, not indices",
+         mutate(PY03_SOLUTION, "return sorted(range(len(values)), key=lambda i: values[i])", "return sorted(values)"),
+         "Argsort", "positions"),
+        ("plain zip silently truncates",
+         mutate(PY03_SOLUTION, "zip(features, labels, strict=True)", "zip(features, labels)"),
+         "Aligned pairs", ("ValueError", "strict=True")),
+        ("ranks start at 0",
+         mutate(PY03_SOLUTION, "enumerate(leaderboard(scores), start=1)", "enumerate(leaderboard(scores))"),
+         "Podium", "start=1"),
+        ("columns left as tuples",
+         mutate(PY03_SOLUTION, "[list(col) for col in zip(*rows)]", "list(zip(*rows))"), "Transpose", "tuples"),
+        ("returns records.sort()",
+         mutate(PY03_SOLUTION, 'return sorted(records, key=lambda r: r["age"])',
+                'return records.sort(key=lambda r: r["age"])'),
+         "Purge the daemon", ("None", "sorted(")),
+    )
+
+
+# ── PY04 SCROLLS OF THE ORDER ───────────────────────────────────────────────────
+
+PY04_SOLUTION = r"""
+import csv
+
+TRUE_WORDS = {"yes", "true", "1"}
+FALSE_WORDS = {"no", "false", "0"}
+
+
+def read_rows(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def parse_flag(text):
+    flag = text.strip().lower()
+    if flag in TRUE_WORDS:
+        return True
+    if flag in FALSE_WORDS:
+        return False
+    raise ValueError(f"bad active flag: {text!r}")
+
+
+def parse_record(row):
+    return {
+        "id": int(row["id"]),
+        "name": row["name"].strip(),
+        "sector": row["sector"].strip().lower(),
+        "age": int(row["age"]),
+        "yield_kg": float(row["yield_kg"]),
+        "active": parse_flag(row["active"]),
+    }
+
+
+def load_typed(path):
+    return [parse_record(r) for r in read_rows(path)]
+
+
+def write_rows(path, records, fields):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(records)
+    return len(records)
+
+
+def oldest_age(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return max(int(row["age"]) for row in csv.DictReader(f))
+"""
+
+NAIVE_READER = """def read_rows(path):
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    header = lines[0].split(",")
+    return [dict(zip(header, line.split(","))) for line in lines[1:]]
+"""
+
+
+@unittest.skipUnless(_importable("PY04"), "PY04 not built or requirements missing")
+class PY04ScrollsTests(LabPYMixin, unittest.TestCase):
+    entry_id = "PY04"
+    solution = PY04_SOLUTION
+    mistakes = (
+        ("split(',') instead of csv.DictReader",
+         mutate(PY04_SOLUTION, 'def read_rows(path):\n    with open(path, newline="", encoding="utf-8") as f:\n'
+                '        return list(csv.DictReader(f))\n', NAIVE_READER),
+         "Unroll", "csv.DictReader"),
+        ("age left as text",
+         mutate(PY04_SOLUTION, '"age": int(row["age"]),', '"age": row["age"].strip(),'), "Type rite", "int("),
+        ("bool() of the text",
+         mutate(PY04_SOLUTION, '"active": parse_flag(row["active"]),', '"active": bool(row["active"].strip()),'),
+         "The truth trap", "truthy"),
+        ("accepts junk flags as False",
+         mutate(PY04_SOLUTION, '"active": parse_flag(row["active"]),',
+                '"active": row["active"].strip().lower() in TRUE_WORDS,'),
+         "The truth trap", "ValueError"),
+        ("DictWriter without extrasaction",
+         mutate(PY04_SOLUTION, ', extrasaction="ignore")', ")"), "Inscribe", "extrasaction"),
+        ("max over strings (the shipped bug)",
+         mutate(PY04_SOLUTION, "max(int(row[\"age\"]) for", "max(row[\"age\"] for"), "Purge the rot", "'9' > '100'"),
     )
 
 

@@ -269,13 +269,15 @@ def _crash_hint(exc: BaseException) -> str:
     return "Call the function yourself on this input and read the full error."
 
 
-def _call(label: str, fn, *args):
+def _call(label: str, fn, *args, crash_hint=None, **kwargs):
     """Call the player's function on copies; a crash or an in-place edit fails the layer."""
     copies = [a.copy() if isinstance(a, np.ndarray) else a for a in args]
     try:
-        out = fn(*copies)
+        out = fn(*copies, **kwargs)
     except Exception as exc:  # noqa: BLE001 — the player's bug, reported as a failed layer
-        raise Fail(f"`{label}` raised {type(exc).__name__}: {exc}", hint=_crash_hint(exc))
+        text = str(exc)
+        text = text if len(text) <= 200 else text[:199] + "…"
+        raise Fail(f"`{label}` raised {type(exc).__name__}: {text}", hint=(crash_hint or _crash_hint)(exc))
     for original, passed in zip(args, copies):
         if isinstance(original, np.ndarray) and (passed.shape != original.shape
                                                  or not np.array_equal(passed, original)):
@@ -320,22 +322,24 @@ def _scalar(got, label: str) -> float:
     return float(arr.reshape(()))
 
 
-def _sealed(ctx):
-    """Line and name of the first sealed shortcut in the player's code, or None."""
+def _sealed(ctx, modules=SEALED_MODULES, names=SEALED_NAMES):
+    """Line and name of the first sealed shortcut in the player's code, or None.
+
+    Shared by the whole ML track (lab/ml02..ml07 import the grader helpers from here)."""
     for node in ast.walk(ctx.tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.split(".")[0] in SEALED_MODULES:
+                if alias.name.split(".")[0] in modules:
                     return node.lineno, alias.name
         elif isinstance(node, ast.ImportFrom):
-            if (node.module or "").split(".")[0] in SEALED_MODULES:
+            if (node.module or "").split(".")[0] in modules:
                 return node.lineno, node.module
             for alias in node.names:
-                if alias.name in SEALED_NAMES:
+                if alias.name in names:
                     return node.lineno, alias.name
-        elif isinstance(node, ast.Attribute) and node.attr in SEALED_NAMES:
+        elif isinstance(node, ast.Attribute) and node.attr in names:
             return node.lineno, node.attr
-        elif isinstance(node, ast.Name) and node.id in SEALED_NAMES:
+        elif isinstance(node, ast.Name) and node.id in names:
             return node.lineno, node.id
     return None
 
