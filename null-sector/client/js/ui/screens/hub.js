@@ -1170,8 +1170,15 @@ export class HubScreen {
     const color = safeColor(entry.sector?.color || (entry.id === 'epilogue' ? AMBER : '#00f0ff'));
     const zone = entry.sector?.zone || (entry.id === 'prologue' ? 'Before the Dead Zone' : entry.id === 'epilogue' ? 'Dawn' : '');
     const title = entry.unlocked ? payload?.title || entry.chapter : 'Encrypted';
+    const here = !!entry.sector?.levels?.some((l) => l.status === 'current');
     const lock =
-      entry.tier !== null ? `Reach ${entry.chapter} to unlock` : entry.id === 'epilogue' ? 'Restore every sector to unlock' : 'Locked';
+      entry.tier !== null
+        ? here
+          ? 'Plays on your first deploy'
+          : `Reach ${entry.chapter} to unlock`
+        : entry.id === 'epilogue'
+          ? 'Restore every sector to unlock'
+          : 'Locked';
     const state = !entry.unlocked ? 'Locked' : entry.seen ? 'Seen' : 'New';
     return h(
       'li',
