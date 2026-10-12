@@ -181,7 +181,7 @@
 
 .story-chapter.is-locked {
   cursor: not-allowed;
-  color: var(--dim);
+  color: var(--muted);
   background: rgba(2, 4, 8, 0.5);
 }
 
@@ -191,7 +191,7 @@
 
 .story-chapter.is-locked .story-chapter__index,
 .story-chapter.is-locked .story-chapter__play {
-  color: var(--dim);
+  color: var(--muted);
   text-shadow: none;
 }
 
@@ -213,6 +213,12 @@ body.reduce-motion .story-reel__panel {
 
 body.reduce-motion .story-reel.is-open .story-reel__item {
   animation: none;
+}
+
+/* LOCKED is not a failure: neutral chip, and encrypted rows at --muted (inactive UI, 3.6:1). */
+.story-chapter__state.chip--bad {
+  --accent: var(--meta);
+  --accent-rgb: var(--meta-rgb);
 }
 
 @media (max-width: 1100px) {

@@ -25,7 +25,7 @@
   --ce-bg: rgba(3, 5, 10, 0.72);
   --ce-gutter-bg: #060910;
   --ce-guide: rgba(136, 146, 166, 0.09);
-  --ce-num: #343c4b;
+  --ce-num: #5b667a; /* 3.4:1 on the gutter: readable, still quieter than code */
   --ce-num-active: #e6f4ff;
 
   /* syntax — cool = structure, warm = values, magenta = text, slate = commentary */
@@ -213,7 +213,7 @@
   height: var(--ce-lh);
   transform: translate3d(0, calc(var(--line, 0) * var(--ce-lh)), 0);
   background: var(--ce-gutter-bg);
-  color: #5d6b80;
+  color: var(--meta, #7c879b);
   transition: color var(--t-med, 220ms) var(--ease-out, ease-out);
 }
 .ce:focus-within .ce-gcur {

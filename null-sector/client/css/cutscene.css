@@ -10,9 +10,8 @@
  */
 
 .screen.screen--cutscene {
-  --bar: max(0px, calc((100vh - 100vw / 2.39) / 2));
-  --magenta-rgb: 255, 43, 214;
-  --violet-rgb: 140, 77, 255;
+  /* 2.39:1 letterbox, capped so a tall phone keeps a real picture instead of a 163 px strip */
+  --bar: min(max(0px, calc((100vh - 100vw / 2.39) / 2)), 16vh);
   --accent: var(--magenta);
   --accent-rgb: var(--magenta-rgb);
   position: relative;
@@ -455,6 +454,16 @@ body.reduce-motion .cs-line::after {
 @media (max-width: 640px) {
   .cs-title {
     padding: 0 16px;
+  }
+
+  /* subtitles sit over the picture, just above the lower bar, so they never collide with its HUD */
+  .cs-subs {
+    bottom: calc(var(--bar) + 18px);
+    transform: translate(-50%, 0);
+  }
+
+  .cs-line {
+    font-size: 15px;
   }
 
   .cs-title__name {

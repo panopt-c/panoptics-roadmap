@@ -474,7 +474,6 @@ body.no-webgl #fallback-bg {
   width: 6px;
   height: 6px;
   background: var(--accent);
-  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.8);
   transform: rotate(45deg);
 }
 
@@ -612,7 +611,7 @@ body.no-webgl #fallback-bg {
 
 .btn--ghost {
   --btn-fill: rgba(var(--accent-rgb), 0);
-  --btn-line: rgba(var(--accent-rgb), 0.28);
+  --btn-line: rgba(var(--accent-rgb), var(--a-ui));
   --btn-ink: var(--steel);
 }
 
@@ -624,7 +623,7 @@ body.no-webgl #fallback-bg {
 }
 
 .btn--lg {
-  --c: 12px;
+  --c: var(--cut-md);
   min-height: 54px;
   padding: 0 26px;
   gap: 14px;
@@ -660,7 +659,7 @@ body.no-webgl #fallback-bg {
 }
 
 .icon-btn {
-  --c: 7px;
+  --c: var(--cut-sm);
   --btn-line: rgba(var(--accent-rgb), 0.3);
   --btn-ink: var(--steel);
   display: inline-grid;
@@ -860,6 +859,10 @@ body.no-webgl #fallback-bg {
   margin-top: 0.85em;
 }
 
+.rich p {
+  text-wrap: pretty;
+}
+
 .rich h1,
 .rich h2,
 .rich h3,
@@ -974,6 +977,15 @@ body.no-webgl #fallback-bg {
   tab-size: 4;
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--accent-rgb), 0.3) transparent;
+  /* a long line reads as "scrolls", not as a rendering bug */
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+}
+
+.rich pre.code:hover,
+.rich pre.code:focus-within {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .rich pre.code code {
@@ -1027,8 +1039,8 @@ body.no-webgl #fallback-bg {
   box-shadow:
     inset 2px 0 0 var(--accent),
     inset 0 0 0 1px rgba(var(--accent-rgb), 0.22);
-  clip-path: polygon(0 0, calc(100% - var(--c)) 0, 100% var(--c), 100% 100%, 0 100%);
-  animation: toast-in 460ms var(--ease-back) both;
+  clip-path: polygon(0 0, calc(100% - var(--c)) 0, 100% var(--c), 100% 100%, var(--c) 100%, 0 calc(100% - var(--c)));
+  animation: toast-in var(--t-slow) var(--ease-back) both;
 }
 
 .toast__icon {
@@ -1541,6 +1553,23 @@ body.no-webgl #fallback-bg {
     filter 300ms var(--ease-out);
 }
 
+/* A soft scrim behind the wordmark block keeps the subtitle legible where it crosses the Core beam;
+   the beam still reads above and below it. */
+.boot__center::before {
+  content: '';
+  position: absolute;
+  inset: -6vh -8vw;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(3, 4, 8, 0.72), rgba(3, 4, 8, 0));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1000ms var(--ease-in-out);
+}
+
+.screen--boot.is-revealed .boot__center::before {
+  opacity: 1;
+}
+
 .boot__logo {
   opacity: 0;
   transition: opacity 160ms var(--ease-out);
@@ -1561,11 +1590,11 @@ body.no-webgl #fallback-bg {
 .boot__sub {
   display: flex;
   align-items: center;
-  padding-left: 0.5em;
+  padding-left: var(--tracking-kicker);
   font: 600 13px/1 var(--font-display);
-  letter-spacing: 0.5em;
+  letter-spacing: var(--tracking-kicker);
   text-transform: uppercase;
-  color: var(--steel);
+  color: var(--text-2);
   opacity: 0;
   translate: 0 8px;
   transition:
@@ -1688,8 +1717,18 @@ body.no-webgl #fallback-bg {
 
 .hub-gallery {
   --accent: var(--magenta);
-  --accent-rgb: 255, 43, 214;
+  --accent-rgb: var(--magenta-rgb);
+  --hairline-c: rgba(var(--steel-rgb), 0.22);
   grid-area: gallery;
+}
+
+/* Narrative magenta marks the title and the cards, not the chrome: the map + DEPLOY are the focal pair. */
+.hub-gallery::after {
+  opacity: 0.45;
+}
+
+.hub-gallery .panel__head {
+  background: linear-gradient(90deg, rgba(var(--magenta-rgb), 0.06), rgba(var(--magenta-rgb), 0) 65%);
 }
 
 /* topbar extras */
@@ -1730,7 +1769,6 @@ body.no-webgl #fallback-bg {
   font-size: 12px;
   font-weight: 700;
   color: var(--accent);
-  text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.6);
 }
 
 .hub-sector__name {
@@ -1821,7 +1859,7 @@ body.no-webgl #fallback-bg {
   height: 34%;
   pointer-events: none;
   background: linear-gradient(180deg, rgba(0, 240, 255, 0), rgba(0, 240, 255, 0.13) 85%, rgba(0, 240, 255, 0.4) 100%);
-  animation: portrait-scan 5.5s var(--ease-in-out) infinite;
+  animation: portrait-scan 9s var(--ease-in-out) 3; /* scan on arrival, then rest */
 }
 
 @keyframes portrait-scan {
@@ -1853,7 +1891,6 @@ body.no-webgl #fallback-bg {
   letter-spacing: 0.1em;
   text-overflow: ellipsis;
   color: var(--cyan);
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.55), 0 0 26px rgba(0, 240, 255, 0.2);
 }
 
 .operative__callsign.is-unregistered {
@@ -1897,7 +1934,6 @@ body.no-webgl #fallback-bg {
   text-align: right;
   text-transform: uppercase;
   color: var(--magenta);
-  text-shadow: 0 0 10px rgba(255, 43, 214, 0.45);
 }
 
 .operative__xp {
@@ -1965,7 +2001,6 @@ body.no-webgl #fallback-bg {
 
 .breach-strip__cell.is-current {
   box-shadow: inset 0 0 0 1px var(--c);
-  animation: cell-blink 1.4s var(--ease-in-out) infinite;
 }
 
 .breach-strip__cell.is-encrypted {
@@ -1977,9 +2012,6 @@ body.no-webgl #fallback-bg {
   animation-delay: calc(500ms + var(--n) * 28ms);
 }
 
-@keyframes cell-blink {
-  50% { background: rgba(var(--c-rgb), 0.45); }
-}
 
 /* deploy button: the hub's primary CTA. The title owns the full width (it must never wrap at
    desktop); ENTER sits top-right as a key legend beside the kicker. */
@@ -2017,11 +2049,12 @@ body.no-webgl #fallback-bg {
 
 .deploy__chev {
   display: inline-block;
-  animation: chev-nudge 1.4s var(--ease-in-out) infinite;
+  transition: translate var(--t-med) var(--ease-out);
 }
 
-@keyframes chev-nudge {
-  50% { translate: 4px 0; }
+.deploy:hover .deploy__chev,
+.deploy:focus-visible .deploy__chev {
+  translate: 4px 0;
 }
 
 .deploy__boss::before {
@@ -2198,7 +2231,6 @@ body.no-webgl #fallback-bg {
 
 .map__band.is-live .map__sector-index {
   color: var(--c);
-  text-shadow: 0 0 12px rgba(var(--c-rgb), 0.55);
 }
 
 .map__band.is-live .map__sector-name {
@@ -2468,10 +2500,6 @@ body.no-webgl #fallback-bg {
   --core: linear-gradient(180deg, rgba(var(--c-rgb), 0.95), rgba(var(--c-rgb), 0.68));
 }
 
-.map-node.is-cleared .map-node__hex {
-  filter: drop-shadow(0 0 6px rgba(var(--c-rgb), 0.55));
-}
-
 .map-node.is-cleared .map-node__glyph {
   color: var(--void);
 }
@@ -2514,7 +2542,6 @@ body.no-webgl #fallback-bg {
   color: var(--void);
   background: var(--c);
   box-shadow: 0 0 12px rgba(var(--c-rgb), 0.6);
-  animation: tag-bob 1.8s var(--ease-in-out) infinite;
 }
 
 .map-node.is-current .map-node__tag::after {
@@ -2530,10 +2557,6 @@ body.no-webgl #fallback-bg {
 @keyframes node-pulse {
   0% { opacity: 0.85; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.9); }
-}
-
-@keyframes tag-bob {
-  50% { translate: 0 -3px; }
 }
 
 /* status: encrypted */
@@ -2621,11 +2644,6 @@ body.no-webgl #fallback-bg {
   animation-delay: calc(380ms + var(--n) * 32ms);
 }
 
-.screen.is-active .map-node.is-current .map-node__tag {
-  animation: fade-in 420ms var(--ease-out) backwards, tag-bob 1.8s var(--ease-in-out) infinite;
-  animation-delay: calc(380ms + var(--n) * 32ms), 0s;
-}
-
 @keyframes node-in {
   from { opacity: 0; transform: scale(0.2); }
 }
@@ -2657,7 +2675,7 @@ body.no-webgl #fallback-bg {
 }
 
 .map-unlock {
-  --c: 9px;
+  --c: var(--cut-md);
   position: absolute;
   z-index: 4;
   display: grid;
@@ -2743,7 +2761,7 @@ body.no-webgl #fallback-bg {
   top: 0;
   left: 0;
   z-index: 30;
-  width: 252px;
+  width: 280px;
   padding: 12px 14px;
   pointer-events: none;
   background:
@@ -2772,9 +2790,10 @@ body.no-webgl #fallback-bg {
 
 .map-tip__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 4px 10px;
   margin-bottom: 8px;
 }
 
@@ -2790,6 +2809,12 @@ body.no-webgl #fallback-bg {
   font-size: 12px;
   font-weight: 700;
   color: var(--accent);
+}
+
+/* LOCKED is not a failure: the tooltip's status chip speaks in neutral meta, not blood. */
+.map-tip__status.chip--bad {
+  --accent: var(--meta);
+  --accent-rgb: var(--meta-rgb);
 }
 
 .map-tip__status:not(.chip--ok):not(.chip--warn):not(.chip--bad) {
@@ -3683,6 +3708,110 @@ body.crt-off #crt {
 
   .boot__prompt {
     margin-top: 4vh;
+  }
+}
+
+@media (max-width: 560px) {
+  /* boot: the BIOS log wraps instead of running off the edge; the subtitle breaks into two lines */
+  .boot__log {
+    font-size: 11px;
+  }
+
+  .boot__logo {
+    font-size: clamp(32px, 10.5vw, 46px);
+  }
+
+  .boot__line {
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    white-space: normal;
+  }
+
+  .boot__leader {
+    display: none;
+  }
+
+  .boot__sub {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
+    padding-left: 0.24em;
+    letter-spacing: 0.24em;
+  }
+
+  .boot__sub i {
+    display: none;
+  }
+
+  .boot__sub-part {
+    flex: 0 0 100%;
+  }
+
+  .boot__meta {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .boot__prompt {
+    padding: 12px 16px;
+    letter-spacing: 0.24em;
+  }
+
+  .boot__prompt::before,
+  .boot__prompt::after {
+    display: none;
+  }
+
+  .boot__prompt-text {
+    padding-left: 0.24em;
+  }
+
+  /* settings: label and value on one line, the full-width control below */
+  .setting {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .setting__text {
+    grid-area: 1 / 1;
+  }
+
+  .setting__value {
+    grid-area: 1 / 2;
+  }
+
+  .setting__control {
+    grid-area: 2 / 1 / 3 / 3;
+    justify-content: stretch;
+  }
+
+  .setting--toggle .setting__control,
+  .setting--choice .setting__control {
+    grid-area: 1 / 2;
+  }
+
+  .setting--choice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .setting--choice .setting__control {
+    grid-area: 2 / 1;
+  }
+
+  .segmented {
+    width: 100%;
+  }
+
+  .settings__body {
+    padding: 2px 16px 10px;
+  }
+
+  .settings__keys {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .settings__stats {
+    display: none;
   }
 }
 

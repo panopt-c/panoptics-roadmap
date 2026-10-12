@@ -12,10 +12,6 @@
  */
 
 .screen.screen--mission {
-  --blood-rgb: 255, 51, 85;
-  --acid-rgb: 57, 255, 20;
-  --amber-rgb: 255, 176, 0;
-  --cyan-rgb: 0, 240, 255;
   display: grid;
   grid-template-rows: var(--topbar-h) minmax(0, 1fr);
   height: 100%;
@@ -216,10 +212,10 @@
   background: none;
   padding: 0 8px;
   height: 100%;
-  min-height: 34px;
+  min-height: 42px;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--steel);
@@ -523,7 +519,7 @@
   background: rgba(22, 16, 6, 0.94);
   border: 1px solid rgba(var(--amber-rgb), 0.55);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 18px rgba(var(--amber-rgb), 0.12);
-  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  clip-path: polygon(0 0, calc(100% - var(--cut-md)) 0, 100% var(--cut-md), 100% 100%, var(--cut-md) 100%, 0 calc(100% - var(--cut-md)));
   animation: mission-conflict-in 300ms var(--ease-back) both;
 }
 
@@ -619,7 +615,7 @@
   background: rgba(24, 6, 11, 0.95);
   border: 1px solid rgba(var(--blood-rgb), 0.55);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6), 0 0 22px rgba(var(--blood-rgb), 0.14);
-  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  clip-path: polygon(0 0, calc(100% - var(--cut-md)) 0, 100% var(--cut-md), 100% 100%, var(--cut-md) 100%, 0 calc(100% - var(--cut-md)));
   animation: mission-conflict-in 300ms var(--ease-back) both;
 }
 
@@ -943,7 +939,6 @@
   margin-left: auto;
   min-width: 0;
   color: var(--text);
-  text-shadow: 0 0 12px rgba(var(--blood-rgb), 0.45);
 }
 
 .mission-target__name-text {
@@ -1718,6 +1713,17 @@
 
   .mission-timer__value {
     font-size: 18px;
+  }
+}
+
+/* Short windows (1280x720): the objectives list gives way so its last row is never cut. */
+@media (max-height: 760px) {
+  .mission-objectives {
+    max-height: 34%;
+  }
+
+  .objective {
+    padding-block: 3px;
   }
 }
 

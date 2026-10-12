@@ -1,25 +1,136 @@
-/* Story dialogue sits in the browser's top layer, above the animated game. */
+/* Story dialogue sits in the browser's top layer, above the animated game. It speaks the panel
+   language (chamfered frame, hairline with bright chamfer diagonals, two corner brackets), tinted
+   by the speaker, and sits in the lower third like comms subtitles so the code it talks about
+   stays visible above it. */
 .dialogue {
+  --accent: var(--speaker, var(--cyan));
+  --accent-rgb: var(--speaker-rgb, var(--cyan-rgb));
+  --c: var(--cut-lg);
+  position: fixed;
   box-sizing: border-box;
   width: min(660px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
-  overflow: auto;
-  padding: 28px;
+  margin: auto auto max(24px, 9vh);
+  padding: 26px 28px 24px;
+  overflow: hidden;
   color: #e6f6fa;
-  background: #0a1420;
-  border: 1px solid var(--speaker, #00f0ff);
-  box-shadow: 0 0 44px color-mix(in srgb, var(--speaker, #00f0ff) 14%, transparent);
-  transition: border-color .25s, box-shadow .25s;
-  font: 16px/1.65 'JetBrains Mono', monospace;
+  border: 0;
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.07), rgba(var(--accent-rgb), 0) 120px),
+    var(--surface-modal);
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+  box-shadow: none;
+  font: 400 var(--fs-lead)/1.65 var(--font-mono);
+  transition: background-color var(--t-med) var(--ease-out);
 }
-.dialogue::backdrop { background: #030710c9; }
-.dialogue__label { color: #8299a9; font-size: 11px; letter-spacing: .16em; }
-.dialogue__speaker { margin: 12px 0; color: var(--speaker, #00f0ff); font: 700 26px 'Chakra Petch', sans-serif; }
-.dialogue__text { margin: 16px 0 28px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.dialogue__controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.dialogue__count { margin-right: auto; color: #8299a9; font-size: 12px; }
-.dialogue button:focus-visible { outline: var(--focus-w) solid var(--speaker, var(--cyan)); outline-offset: var(--focus-offset); }
+
+.dialogue[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* hairline frame + chamfer diagonals (same construction as .panel::before) */
+.dialogue::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), var(--a-hot)) calc(var(--c) * 0.7071 + 1.5px), transparent 0),
+    linear-gradient(315deg, rgba(var(--accent-rgb), var(--a-hot)) calc(var(--c) * 0.7071 + 1.5px), transparent 0),
+    rgba(var(--accent-rgb), var(--a-line));
+  clip-path: polygon(evenodd,
+    var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c), var(--c) 0,
+    calc(var(--c) + 0.42px) 1px, 1px calc(var(--c) + 0.42px), 1px calc(100% - 1px),
+    calc(100% - var(--c) - 0.42px) calc(100% - 1px), calc(100% - 1px) calc(100% - var(--c) - 0.42px),
+    calc(100% - 1px) 1px, calc(var(--c) + 0.42px) 1px);
+}
+
+/* corner brackets on the two square corners (as .panel::after) */
+.dialogue::after {
+  --b: 12px;
+  --t: 2px;
+  content: '';
+  position: absolute;
+  inset: 4px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.9;
+  background:
+    linear-gradient(var(--accent), var(--accent)) top right / var(--b) var(--t) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) top right / var(--t) var(--b) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) bottom left / var(--b) var(--t) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) bottom left / var(--t) var(--b) no-repeat;
+}
+
+.dialogue::backdrop {
+  background: linear-gradient(to top, rgba(3, 7, 16, 0.86) 0, rgba(3, 7, 16, 0.55) 55%, rgba(3, 7, 16, 0.4));
+}
+
+.dialogue__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 var(--fs-label)/1 var(--font-display);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+.dialogue__label::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  transform: rotate(45deg);
+}
+
+.dialogue__speaker {
+  margin: 12px 0 0;
+  font: 700 var(--fs-h2)/1.1 var(--font-display);
+  letter-spacing: var(--tracking-display);
+  color: var(--accent);
+}
+
+/* a long line scrolls inside the frame; the frame itself never scrolls away */
+.dialogue__text {
+  min-height: 0;
+  margin: 14px 0 24px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.dialogue__controls {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.dialogue__count {
+  margin-right: auto;
+  font: 500 var(--fs-meta)/1 var(--font-mono);
+  letter-spacing: var(--tracking-mono);
+  color: var(--steel);
+}
+
+.dialogue button:focus-visible {
+  outline: var(--focus-w) solid var(--accent);
+  outline-offset: var(--focus-offset);
+}
+
 @media (max-width: 480px) {
-  .dialogue { padding: 20px; font-size: 14px; }
-  .dialogue__controls .btn { min-height: 44px; }
+  .dialogue {
+    padding: 20px;
+    font-size: 14px;
+  }
+
+  .dialogue__controls .btn {
+    min-height: 44px;
+  }
 }

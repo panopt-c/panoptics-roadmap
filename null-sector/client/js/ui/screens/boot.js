@@ -50,7 +50,13 @@ export class BootScreen {
 
     r.log = h('div', { class: 'boot__log', 'aria-hidden': 'true' });
     r.logo = h('h1', { class: 'ns-logo boot__logo', 'data-text': LOGO, 'aria-label': LOGO });
-    r.sub = h('p', { class: 'boot__sub' }, 'A Python survival RPG', h('i', { 'aria-hidden': 'true' }, '·'), 'Zero → AI engineer');
+    r.sub = h(
+      'p',
+      { class: 'boot__sub' },
+      h('span', { class: 'boot__sub-part' }, 'A Python survival RPG'),
+      h('i', { 'aria-hidden': 'true' }, '·'),
+      h('span', { class: 'boot__sub-part' }, 'Zero → AI engineer'),
+    );
     r.prompt = h('p', { class: 'boot__prompt' }, h('span', { class: 'boot__prompt-text' }, 'Press any key to jack in'));
     r.meta = h(
       'div',

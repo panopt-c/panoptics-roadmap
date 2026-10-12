@@ -6,6 +6,9 @@ const SPEAKER_COLORS = {
   warden: '#ff3355', arbiter: '#ff3355', forgemaster: '#ff3355', librarian: '#ff3355', core: '#ff3355',
 };
 
+/** '#00f0ff' → '0, 240, 255', so the frame can tint by speaker with rgba(var(--speaker-rgb), a). */
+const hexTriplet = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
+
 /** Keyboard-accessible story sequences; native dialog keeps focus out of the editor. */
 export class DialogueOverlay {
   #dialog = null;
@@ -36,7 +39,9 @@ export class DialogueOverlay {
       const line = sequence[index];
       const who = String(line.speaker || 'cipher');
       speaker.textContent = who.toUpperCase();
-      dialog.style.setProperty('--speaker', SPEAKER_COLORS[who.toLowerCase()] || SPEAKER_COLORS.cipher);
+      const color = SPEAKER_COLORS[who.toLowerCase()] || SPEAKER_COLORS.cipher;
+      dialog.style.setProperty('--speaker', color);
+      dialog.style.setProperty('--speaker-rgb', hexTriplet(color));
       const callsign = String(this.ctx.state?.profile?.callsign || 'runner');
       // Callback replacement preserves literal dollars in player names; textContent prevents markup injection.
       text.textContent = line.text.replaceAll('{callsign}', () => callsign);
