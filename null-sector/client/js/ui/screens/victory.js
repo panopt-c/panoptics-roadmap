@@ -294,7 +294,7 @@ export class VictoryScreen {
     r.actions = h('div', { class: 'victory__actions' }, play, hub);
     this.#setCastStatus(this.#ctx.state?.higgsfield?.online ? 'rendering' : 'offline');
 
-    r.skip = h('div', { class: 'victory__skip label' }, 'ANY KEY — SKIP');
+    r.skip = h('div', { class: 'victory__skip label' }, 'ANY KEY // SKIP');
 
     r.panel = h(
       'div',

@@ -525,14 +525,19 @@ export class HubScreen {
       return;
     }
     r.deployKey.hidden = false;
-    r.deployTitle.textContent = `${target.id} · ${target.title}`;
+    // Bosses drop the "BOSS:" prefix from the title (the kicker carries it), so the CTA stays on one line.
+    r.deployTitle.textContent = `${target.id} · ${shortTitle(target.title)}`;
     if (target.status === 'encrypted') {
       btn.classList.add('is-encrypted');
       r.deployKicker.replaceChildren(h('span', { class: 'deploy__lock', html: ICON_LOCK }), 'Encrypted');
       r.deployConcept.textContent = 'Ask Claude to build the next level';
       btn.setAttribute('aria-label', `${target.id} ${target.title} is encrypted. Ask Claude to build the next level.`);
     } else {
-      r.deployKicker.replaceChildren('Deploy', h('span', { class: 'deploy__chev', 'aria-hidden': 'true' }, '▸'));
+      r.deployKicker.replaceChildren(
+        'Deploy',
+        h('span', { class: 'deploy__chev', 'aria-hidden': 'true' }, '▸'),
+        target.boss ? h('span', { class: 'deploy__boss' }, 'Boss') : '',
+      );
       r.deployConcept.textContent = target.concept;
       btn.setAttribute('aria-label', `Deploy to ${target.id} ${target.title}`);
     }

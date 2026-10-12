@@ -124,9 +124,12 @@
   transition: box-shadow var(--t-med) var(--ease-out);
 }
 
-.story-chapter:hover::after,
-.story-chapter:focus-visible::after {
+.story-chapter:hover::after {
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.95), inset 3px 0 0 var(--accent), inset 0 0 24px rgba(var(--accent-rgb), 0.22);
+}
+
+.story-chapter:focus-visible::after {
+  box-shadow: inset 0 0 0 var(--focus-w) rgba(var(--accent-rgb), var(--a-hot)), inset 3px 0 0 var(--accent), inset 0 0 24px rgba(var(--accent-rgb), 0.22);
 }
 
 .story-chapter:focus-visible {

@@ -78,7 +78,7 @@
 .mission-title__sector {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
   color: var(--sector);
   padding: 2px 6px 1px;
@@ -120,7 +120,7 @@
 
 .mission-timer__par {
   font-size: 11px;
-  color: var(--dim);
+  color: var(--meta);
   letter-spacing: 0.06em;
 }
 
@@ -133,7 +133,7 @@
   position: absolute;
   top: 100%;
   margin-top: 3px;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   white-space: nowrap;
   color: var(--accent);
 }
@@ -188,7 +188,8 @@
 
 .mission-grid {
   display: grid;
-  grid-template-columns: clamp(256px, 24vw, 360px) minmax(0, 1fr) clamp(272px, 24.5vw, 372px);
+  /* The editor is the focal point of a coding game: the side columns give it room for ~80 columns. */
+  grid-template-columns: clamp(248px, 21vw, 340px) minmax(0, 1fr) clamp(256px, 19vw, 320px);
   gap: var(--gutter);
   padding: 4px var(--gutter) var(--gutter);
   min-height: 0;
@@ -253,12 +254,28 @@
 }
 
 .mission-tab:focus-visible {
-  outline: 1px solid rgba(var(--accent-rgb), 0.7);
+  outline: var(--focus-w) solid rgb(var(--accent-rgb));
   outline-offset: -4px;
 }
 
 .mission-tab__short {
   display: none;
+}
+
+/* The brief column is fluid; its tabs switch to the short labels whenever the full ones would not fit. */
+.mission-brief,
+.mission-target {
+  container-type: inline-size;
+}
+
+@container (max-width: 336px) {
+  .mission-tab__full {
+    display: none;
+  }
+
+  .mission-tab__short {
+    display: inline;
+  }
 }
 
 .mission-tab__badge {
@@ -351,7 +368,7 @@
 
 .objective__index {
   font-size: 10px;
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .objective__mark {
@@ -441,6 +458,18 @@
 .mission-editor > * {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/* editor.css tunables; editor.js re-measures the glyph probe on resize */
+.mission-editor .ce {
+  --ce-pad-r: 20px;
+}
+
+@media (max-width: 1366px) {
+  .mission-editor .ce {
+    --ce-font-size: 13px;
+    --ce-lh: 21px;
+  }
 }
 
 /* payload upload sweep while charging */
@@ -725,10 +754,10 @@
 .log-line__tag {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
   line-height: 19px;
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .log-line__text b {
@@ -773,7 +802,7 @@
   gap: 10px;
   margin: 10px 0 4px;
   font-family: var(--font-display);
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   color: var(--steel);
@@ -783,7 +812,7 @@
 .log-head .mono {
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .log-head__rule {
@@ -873,7 +902,7 @@
 }
 
 .mission-log__stdout.is-empty {
-  color: var(--dim);
+  color: var(--meta);
   font-style: italic;
 }
 
@@ -895,7 +924,7 @@
   align-items: center;
   gap: 5px;
   font-family: var(--font-display);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   color: var(--blood);
@@ -1084,12 +1113,18 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 8.5px;
+  font-size: var(--fs-micro);
   line-height: 1;
   letter-spacing: 0.12em;
   white-space: nowrap;
-  color: rgba(var(--blood-rgb), 0.6);
+  color: rgba(255, 107, 129, 0.85); /* --blood-ink at 85 %: 5.4:1 */
   pointer-events: none;
+}
+
+@container (max-width: 300px) {
+  .enemy__readout-extra {
+    display: none;
+  }
 }
 
 .enemy__readout-rule {
@@ -1286,22 +1321,24 @@
 
 .layer__index {
   font-size: 10px;
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .layer__name {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .layer__state {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  color: var(--dim);
+  color: var(--meta);
   white-space: nowrap;
 }
 
@@ -1368,7 +1405,7 @@
 }
 
 .layer.has-intel .layer__name {
-  white-space: normal;
+  -webkit-line-clamp: unset;
 }
 
 .layer__intel {
@@ -1582,14 +1619,105 @@
 }
 
 @media (max-width: 1100px) {
-  .mission-grid {
-    grid-template-columns: 236px minmax(0, 1fr) 262px;
-  }
 
   .mission-attempts .label,
   .mission-target__head > .label,
   .enemy__readout-extra {
     display: none;
+  }
+}
+
+/* Narrow windows (a browser docked beside the IDE): the editor takes the full left column under the
+   brief; the layer list carries the objectives. DOM order (brief, code, target) is reading order. */
+@media (max-width: 1100px) and (min-width: 768px) {
+  .mission-grid {
+    grid-template-columns: minmax(0, 1fr) clamp(256px, 32vw, 320px);
+    grid-template-rows: minmax(0, 34%) minmax(0, 1fr);
+    grid-template-areas:
+      'brief target'
+      'code target';
+  }
+
+  .mission-brief {
+    grid-area: brief;
+  }
+
+  .mission-code {
+    grid-area: code;
+  }
+
+  .mission-target {
+    grid-area: target;
+  }
+
+  .mission-objectives {
+    display: none;
+  }
+}
+
+/* Phones: one scrolling column. Brief, then the editor (visible and typeable), then the target + HACK. */
+@media (max-width: 767px) {
+  .mission-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mission-brief {
+    height: 42dvh;
+  }
+
+  .mission-code {
+    height: 64dvh;
+  }
+
+  .mission-objectives {
+    display: none;
+  }
+
+  .enemy {
+    height: 132px;
+  }
+
+  .mission-log {
+    flex-basis: 34%;
+  }
+
+  .mission-topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .mission-topbar .topbar__center {
+    justify-self: end;
+  }
+
+  .mission-timer {
+    min-width: 0;
+  }
+
+  .mission-attempts,
+  .mission-timer__par,
+  .mission-timer__row .label,
+  .mission-title__sub,
+  .mission-attempts .label {
+    display: none;
+  }
+
+  .mission-title__main {
+    font-size: 14px;
+  }
+
+  .mission-title__level,
+  .mission-title__sep {
+    display: none;
+  }
+
+  .mission-timer__value {
+    font-size: 18px;
   }
 }
 

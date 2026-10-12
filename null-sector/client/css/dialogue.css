@@ -18,7 +18,7 @@
 .dialogue__text { margin: 16px 0 28px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .dialogue__controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .dialogue__count { margin-right: auto; color: #8299a9; font-size: 12px; }
-.dialogue button:focus-visible { outline: 2px solid #ffb000; outline-offset: 4px; }
+.dialogue button:focus-visible { outline: var(--focus-w) solid var(--speaker, var(--cyan)); outline-offset: var(--focus-offset); }
 @media (max-width: 480px) {
   .dialogue { padding: 20px; font-size: 14px; }
   .dialogue__controls .btn { min-height: 44px; }

@@ -161,19 +161,20 @@
 }
 
 .cs-hud__src {
-  color: rgba(136, 146, 166, 0.7);
+  color: var(--meta);
 }
 
 .cs-skip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  color: var(--meta);
   opacity: 0;
   transition: opacity 600ms var(--ease-out);
 }
 
 .cs-skip.is-in {
-  opacity: 0.75;
+  opacity: 1;
 }
 
 /* ── title card ─────────────────────────────────────────────────────── */

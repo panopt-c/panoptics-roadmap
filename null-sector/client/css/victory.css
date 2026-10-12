@@ -254,18 +254,18 @@
 }
 
 .reward--missed {
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .reward--missed .reward__detail {
-  color: var(--dim);
+  color: var(--meta);
 }
 
 .reward--missed .reward__value {
   font-family: var(--font-display);
   font-size: 11px;
   letter-spacing: var(--tracking-label);
-  color: var(--dim);
+  color: var(--meta);
   text-shadow: none;
 }
 
@@ -529,10 +529,11 @@
   left: 50%;
   bottom: 18px;
   transform: translateX(-50%);
-  opacity: 0.55;
+  color: var(--text-2);
+  opacity: 1;
   pointer-events: none;
   transition: opacity 300ms var(--ease-out);
-  animation: v-breathe 1.6s var(--ease-in-out) 1.2s infinite alternate backwards;
+  animation: v-hint 1.6s var(--ease-in-out) 1.2s infinite alternate backwards;
 }
 
 .victory__skip.is-hidden {
@@ -600,6 +601,17 @@
 
   .victory__rankup-name {
     font-size: 24px;
+  }
+}
+
+/* Phones: ACCESS GRANTED wraps onto two balanced lines instead of running off both edges. */
+@media (max-width: 640px) {
+  .victory__title {
+    font-size: clamp(30px, 11vw, 44px);
+    letter-spacing: var(--tracking-display-xl);
+    white-space: normal;
+    text-align: center;
+    text-wrap: balance;
   }
 }
 
@@ -694,5 +706,15 @@
   }
   to {
     opacity: 0.35;
+  }
+}
+
+/* The skip hint pulses between full and 75 % (5.2:1 at its low point); v-breathe would drop it to .35. */
+@keyframes v-hint {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.75;
   }
 }
