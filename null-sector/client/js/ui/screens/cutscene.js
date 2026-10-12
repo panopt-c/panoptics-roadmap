@@ -149,7 +149,8 @@ export class CutsceneScreen {
 
     r.media = h('div', { class: 'cs-media', 'aria-hidden': 'true' });
     r.leak = h('div', { class: 'cs-leak', 'aria-hidden': 'true' });
-    r.titleName = h('h1', { class: 'cs-title__name' }, ' ');
+    const titleLen = Math.max(12, String(cut.title || '').length);
+    r.titleName = h('h1', { class: 'cs-title__name', style: `--title-len: ${titleLen}` }, ' ');
     const story = this.#story;
     const chapter = String(m.chapter || 'STORY').toUpperCase();
     // An act opening's title already names the act ("ACT III · THE FORGE"): its card names the
@@ -159,7 +160,9 @@ export class CutsceneScreen {
     let meta = `${m.id || ''} · ${m.enemy ? `${m.enemy} DELETED` : 'MEMORY FRAGMENT'}`;
     if (story) {
       kicker = sector ? `S${m.tier} · ${String(sector.name || '').toUpperCase()} //` : `${chapter} //`;
-      meta = sector?.zone ? String(sector.zone).toUpperCase() : 'NULL//SECTOR';
+      const zone = String(sector?.zone || '').toUpperCase();
+      // "ACT IV · THE ARCHIVE" already names its zone: don't repeat it underneath.
+      meta = zone && !String(cut.title || '').toUpperCase().includes(zone) ? zone : 'NULL//SECTOR';
     }
     r.title = h(
       'div',

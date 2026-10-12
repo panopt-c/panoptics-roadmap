@@ -229,7 +229,9 @@
   margin: 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(34px, 5.4vw, 84px);
+  /* Long titles ("DAWN OVER THE DEAD ZONE") shrink to fit the frame instead of running off it:
+     --title-len is the title's length, set by the cutscene screen (~0.9em per spaced capital). */
+  font-size: min(clamp(34px, 5.4vw, 84px), calc(84vw / (var(--title-len, 12) * 0.9)));
   line-height: 1;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -446,6 +448,20 @@ body.reduce-motion .cs-leak,
 body.reduce-motion .cs-title.is-in .cs-title__name,
 body.reduce-motion .cs-line::after {
   animation: none;
+}
+
+/* Phones: a long title wraps onto balanced lines rather than shrinking to a whisper. */
+@media (max-width: 640px) {
+  .cs-title {
+    padding: 0 16px;
+  }
+
+  .cs-title__name {
+    font-size: clamp(26px, 8.5vw, 40px);
+    line-height: 1.1;
+    white-space: normal;
+    text-wrap: balance;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
